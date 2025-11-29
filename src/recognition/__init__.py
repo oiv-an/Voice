@@ -5,6 +5,7 @@ from typing import Protocol
 from audio.recorder import AudioData
 from config.settings import RecognitionConfig
 from recognition.groq_api import GroqWhisperRecognizer
+from recognition.gigaam_local import GigaAMRecognizer
 
 
 class IRecognizer(Protocol):
@@ -16,12 +17,19 @@ def create_recognizer(config: RecognitionConfig) -> IRecognizer:
     """
     Factory for recognizers.
 
-    MVP: only Groq backend is fully implemented.
+    Поддерживаем три backend'а:
+      - "groq"   — облачный Groq Whisper
+      - "openai" — (зарезервировано, можно добавить позже)
+      - "local"  — локальный GigaAM-v3-CTC (v2_ctc)
     """
-    backend = config.backend.lower()
+    backend = (config.backend or "groq").lower()
+
+    if backend == "local":
+        # Локальный GigaAM, модель фиксированная: v2_ctc
+        return GigaAMRecognizer(model_name="v2_ctc")
 
     if backend == "groq":
         return GroqWhisperRecognizer(config.groq)
 
-    # Fallback: use Groq even if config says otherwise, to keep MVP working.
+    # Fallback: по умолчанию Groq
     return GroqWhisperRecognizer(config.groq)

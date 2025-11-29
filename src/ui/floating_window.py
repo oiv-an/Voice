@@ -152,6 +152,7 @@ class FloatingWindow(QWidget):
         self.settings_backend_combo = QComboBox()
         self.settings_backend_combo.addItem("Groq", userData="groq")
         self.settings_backend_combo.addItem("OpenAI", userData="openai")
+        self.settings_backend_combo.addItem("Local (GigaAM)", userData="local")
 
         self.settings_groq_key = QLineEdit()
         self.settings_groq_key.setEchoMode(QLineEdit.EchoMode.Password)

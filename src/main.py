@@ -21,7 +21,7 @@ class App:
     MVP workflow:
         global hotkey (record) down   -> start_recording()
         global hotkey (record) up     -> stop_recording()
-        audio -> recognizer (Groq) -> postprocess -> clipboard.copy + paste
+        audio -> recognizer (Groq/GigaAM) -> postprocess -> clipboard.copy + paste
     """
 
     def __init__(self) -> None:
@@ -73,6 +73,62 @@ class App:
 
         # State
         self._is_recording: bool = False
+
+        # Worker thread for heavy audio processing (GigaAM / Groq / LLM)
+        from PyQt6.QtCore import QObject, QThread, pyqtSignal
+
+        class _ProcessingWorker(QObject):
+            finished = pyqtSignal()
+            error = pyqtSignal(str)
+            result_ready = pyqtSignal(str, str)  # raw_text, processed_text
+
+            def __init__(self, app_ref: "App", audio_data) -> None:
+                super().__init__()
+                self._app_ref = app_ref
+                self._audio_data = audio_data
+
+            def run(self) -> None:
+                """
+                Выполняется в отдельном потоке:
+                - распознавание (Groq/GigaAM)
+                - regex + LLM постобработка
+                Никаких Qt-объектов/виджетов здесь не трогаем.
+                """
+                from loguru import logger
+                from recognition.postprocessor import TextPostprocessor as TP
+
+                try:
+                    raw_text = self._app_ref.recognizer.transcribe(self._audio_data)
+                    regex_text = TP._simple_cleanup(raw_text or "")
+
+                    processed_text = regex_text
+                    try:
+                        processed_text = self._app_ref.postprocessor.process(raw_text or "")
+                    except RuntimeError as exc:
+                        logger.error("LLM postprocess error: {}", exc)
+                        # Передаём текст ошибки наверх, чтобы UI показал его
+                        self.error.emit(str(exc))
+                    except Exception as exc:  # noqa: BLE001
+                        logger.exception("Unexpected LLM postprocess error: {}", exc)
+                        self.error.emit("Ошибка LLM-постпроцессинга. См. логи.")
+
+                    self.result_ready.emit(raw_text or "", processed_text or "")
+                except RuntimeError as exc:
+                    # Осмысленные ошибки от распознавания (например, Groq/GigaAM)
+                    from loguru import logger as _logger
+
+                    _logger.error("Processing error: {}", exc)
+                    self.error.emit(str(exc))
+                except Exception as exc:  # noqa: BLE001
+                    from loguru import logger as _logger
+
+                    _logger.exception("Unexpected error during processing: {}", exc)
+                    self.error.emit("Неизвестная ошибка распознавания. См. логи.")
+                finally:
+                    self.finished.emit()
+
+        self._ProcessingWorker = _ProcessingWorker  # type: ignore[attr-defined]
+        self._processing_thread: Optional[QThread] = None
 
         # Hotkeys
         self.hotkeys = HotKeyManager(
@@ -166,8 +222,9 @@ class App:
 
         def on_finished(audio_data):
             # Этот колбэк вызывается из потока рекордера.
-            # Для MVP просто передаём данные в обработку синхронно.
-            self._process_audio(audio_data)
+            # Теперь только запускаем воркер в отдельном QThread,
+            # а UI обновляем через сигналы.
+            self._start_processing_worker(audio_data)
 
         self.audio_recorder.start(on_finished=on_finished)
 
@@ -185,70 +242,69 @@ class App:
         self.window.set_state("idle")
 
     # ----------------------------------------------------------- Processing
-    
-    def _process_audio(self, audio_data) -> None:
-        """Synchronous processing for MVP; later can be moved to worker thread."""
+
+    def _start_processing_worker(self, audio_data) -> None:
+        """
+        Запуск тяжёлой обработки аудио (GigaAM/Groq + LLM) в отдельном QThread.
+
+        ВАЖНО: здесь мы только создаём поток и воркер, а все обновления UI
+        делаем в слотах, которые вызываются уже в главном Qt-потоке.
+        """
+        from PyQt6.QtCore import QThread
         from loguru import logger
         from pathlib import Path
         from datetime import datetime
-    
-        try:
-            self.window.set_state("processing")
-            # 1) сырой текст от Whisper
-            raw_text = self.recognizer.transcribe(audio_data)
-    
-            # 2) regex-очистка (базовый препроцессинг всегда)
-            from recognition.postprocessor import TextPostprocessor as TP  # локальный импорт для статик-метода
-            regex_text = TP._simple_cleanup(raw_text or "")
-    
-            # 3) LLM-постпроцессинг (если включён в конфиге)
-            processed_text = regex_text
+
+        # Если по какой-то причине предыдущий поток ещё жив — аккуратно его гасим.
+        if self._processing_thread is not None:
             try:
-                processed_text = self.postprocessor.process(raw_text or "")
-            except RuntimeError as exc:
-                # осмысленные ошибки LLM
-                logger.error("LLM postprocess error: {}", exc)
-                self.window.show_message(str(exc))
-            except Exception as exc:  # noqa: BLE001
-                logger.exception("Unexpected LLM postprocess error: {}", exc)
-                self.window.show_message("Ошибка LLM-постпроцессинга. См. логи.")
-    
-            # 4) показать оба варианта в окне
+                self._processing_thread.quit()
+                self._processing_thread.wait(100)
+            except Exception:
+                logger.debug("Previous processing thread cleanup failed", exc_info=True)
+
+        self.window.set_state("processing")
+
+        thread = QThread(self.qt_app)
+        worker = self._ProcessingWorker(self, audio_data)
+        worker.moveToThread(thread)
+
+        def on_result(raw_text: str, processed_text: str) -> None:
+            """
+            Этот слот вызывается в главном потоке Qt.
+            Здесь можно безопасно трогать UI, буфер обмена и т.п.
+            """
+            # 1) показать оба варианта в окне
             try:
-                # верхний блок — сырой текст от Whisper
                 if hasattr(self.window, "set_raw_text"):
                     self.window.set_raw_text(raw_text or "")
                 else:
-                    # fallback в старый result_label
-                    self.window.result_label.setText(processed_text)
-    
-                # нижний блок — обработанный текст (regex/LLM)
+                    self.window.result_label.setText(processed_text or "")
+
                 if hasattr(self.window, "set_processed_text"):
-                    self.window.set_processed_text(processed_text)
+                    self.window.set_processed_text(processed_text or "")
             except Exception:
                 logger.debug("window text update failed", exc_info=True)
-    
-            # 5) положить ОБРАБОТАННЫЙ текст в буфер обмена
-            self.clipboard.copy(processed_text)
-    
-            # авто-вставка текста через Ctrl+V (с ретраями внутри ClipboardManager)
+
+            # 2) положить ОБРАБОТАННЫЙ текст в буфер обмена
+            self.clipboard.copy(processed_text or "")
+
+            # 3) авто-вставка текста через Ctrl+V (с ретраями внутри ClipboardManager)
             self.clipboard.paste()
-    
-            # 6) сохранить распознавание в отдельный текстовый лог с ротацией по ~3 МБ
+
+            # 4) сохранить распознавание в отдельный текстовый лог с ротацией по ~3 МБ
             try:
                 base_dir = Path(__file__).resolve().parents[2]
                 log_dir = base_dir / "logs"
                 log_dir.mkdir(parents=True, exist_ok=True)
                 transcript_path = log_dir / "transcripts.log"
-    
-                # простая ротация: если файл больше 3 МБ — переименовать в transcripts_YYYYmmdd_HHMMSS.log
+
                 max_size_bytes = 3 * 1024 * 1024
                 if transcript_path.exists() and transcript_path.stat().st_size >= max_size_bytes:
                     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
                     rotated = log_dir / f"transcripts_{ts}.log"
                     transcript_path.rename(rotated)
-    
-                # формат записи: время, сырой текст, обработанный текст
+
                 with transcript_path.open("a", encoding="utf-8") as f:
                     f.write(
                         f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]\\n"
@@ -257,20 +313,38 @@ class App:
                         "----------------------------------------\\n"
                     )
             except Exception as exc:  # noqa: BLE001
-                # не ломаем основной флоу, если что-то пошло не так с логом
                 logger.exception("Failed to append transcript log: {}", exc)
-    
+
             self.window.set_state("ready")
-        except RuntimeError as exc:
-            # Осмысленные ошибки от распознавания (например, Groq API)
-            logger.error("Processing error: {}", exc)
+
+        def on_error(message: str) -> None:
+            """
+            Слот для ошибок распознавания/LLM.
+            """
+            logger = __import__("loguru").logger  # избежать замыкания logger сверху
+            logger.error("Processing error (worker): {}", message)
             self.window.set_state("error")
-            # Показываем пользователю человекочитаемое сообщение
-            self.window.show_message(str(exc))
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Unexpected error during processing: {}", exc)
-            self.window.set_state("error")
-            self.window.show_message("Неизвестная ошибка распознавания. См. логи.")
+            self.window.show_message(message)
+
+        def on_finished() -> None:
+            """
+            Слот завершения работы воркера: чистим поток.
+            """
+            thread.quit()
+            thread.wait()
+            self._processing_thread = None
+            # Сбрасываем флаг записи, если ещё не сброшен
+            self._is_recording = False
+
+        # wiring сигналов
+        thread.started.connect(worker.run)          # type: ignore[arg-type]
+        worker.result_ready.connect(on_result)      # type: ignore[arg-type]
+        worker.error.connect(on_error)              # type: ignore[arg-type]
+        worker.finished.connect(on_finished)        # type: ignore[arg-type]
+        worker.finished.connect(worker.deleteLater) # type: ignore[arg-type]
+
+        self._processing_thread = thread
+        thread.start()
 
     # -------------------------------------------------------------- Debug
 

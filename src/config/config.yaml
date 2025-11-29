@@ -17,7 +17,7 @@ audio:
   vad_threshold: 0.5
   vad_min_duration: 0.1
 recognition:
-  backend: groq
+  backend: local
   local:
     model: large-v3
     device: cuda

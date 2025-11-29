@@ -1,0 +1,22 @@
+{
+    "sourceFile": "src/recognition/gigaam_local.py",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 1,
+            "patches": [
+                {
+                    "date": 1764457705620,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                },
+                {
+                    "date": 1764458438516,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -18,12 +18,27 @@\n     Интерфейс совместим с GroqWhisperRecognizer: метод transcribe(audio) -> str.\r\n     \"\"\"\r\n \r\n     def __init__(self, model_name: str = \"v2_ctc\") -> None:\r\n+        import torch  # локальный импорт, чтобы не тянуть при импорте модуля\r\n+\r\n         self.model_name = model_name\r\n-        logger.info(\"Loading GigaAM model: {}\", model_name)\r\n+\r\n+        # Определяем, есть ли CUDA\r\n+        has_cuda = torch.cuda.is_available()\r\n+        device = \"cuda\" if has_cuda else \"cpu\"\r\n+\r\n+        if has_cuda:\r\n+            logger.info(\"Loading GigaAM model: {} on GPU (cuda)\", model_name)\r\n+        else:\r\n+            logger.info(\"Loading GigaAM model: {} on CPU (no CUDA detected)\", model_name)\r\n+\r\n         # Модель автоматически скачивается при первом запуске.\r\n-        self.model = gigaam.load_model(model_name)\r\n+        # Явно указываем device, чтобы при наличии CUDA использовать GPU.\r\n+        self.model = gigaam.load_model(\r\n+            model_name,\r\n+            device=device,\r\n+        )\r\n \r\n     def transcribe(self, audio: AudioData) -> str:\r\n         \"\"\"\r\n         Принимает AudioData (float32 numpy, 16kHz mono) и возвращает текст.\r\n"
+                }
+            ],
+            "date": 1764457705620,
+            "name": "Commit-0",
+            "content": "from __future__ import annotations\r\n\r\nimport tempfile\r\nfrom pathlib import Path\r\n\r\nimport gigaam  # type: ignore[import]\r\nimport soundfile as sf  # type: ignore[import]\r\nfrom loguru import logger  # type: ignore[import]\r\n\r\nfrom audio.recorder import AudioData\r\n\r\n\r\nclass GigaAMRecognizer:\r\n    \"\"\"\r\n    Локальный распознаватель на базе GigaAM-v3-CTC (API: v2_ctc).\r\n\r\n    Используется как backend \"local\" наряду с Groq и OpenAI.\r\n    Интерфейс совместим с GroqWhisperRecognizer: метод transcribe(audio) -> str.\r\n    \"\"\"\r\n\r\n    def __init__(self, model_name: str = \"v2_ctc\") -> None:\r\n        self.model_name = model_name\r\n        logger.info(\"Loading GigaAM model: {}\", model_name)\r\n        # Модель автоматически скачивается при первом запуске.\r\n        self.model = gigaam.load_model(model_name)\r\n\r\n    def transcribe(self, audio: AudioData) -> str:\r\n        \"\"\"\r\n        Принимает AudioData (float32 numpy, 16kHz mono) и возвращает текст.\r\n\r\n        Для надёжности пишем во временный WAV и даём путь модели.\r\n        \"\"\"\r\n        with tempfile.TemporaryDirectory() as tmpdir:\r\n            wav_path = Path(tmpdir) / \"input.wav\"\r\n\r\n            # Сохраняем numpy → WAV (16kHz mono, PCM_16)\r\n            sf.write(\r\n                wav_path,\r\n                audio.samples,\r\n                audio.sample_rate,\r\n                format=\"WAV\",\r\n                subtype=\"PCM_16\",\r\n            )\r\n\r\n            try:\r\n                text = self.model.transcribe(str(wav_path))\r\n            except Exception as exc:  # noqa: BLE001\r\n                logger.exception(\"GigaAM transcribe error: {}\", exc)\r\n                raise RuntimeError(\"GigaAM: ошибка распознавания.\") from exc\r\n\r\n        if not isinstance(text, str):\r\n            logger.error(\"GigaAM returned non-string transcription: {}\", text)\r\n            raise RuntimeError(\"GigaAM: некорректный формат ответа.\")\r\n\r\n        return text or \"\""
+        }
+    ]
+}
