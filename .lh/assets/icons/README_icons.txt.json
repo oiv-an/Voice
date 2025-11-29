@@ -1,0 +1,18 @@
+{
+    "sourceFile": "assets/icons/README_icons.txt",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1764294465437,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1764294465437,
+            "name": "Commit-0",
+            "content": "This directory contains icon assets for the VoiceCapture application.\r\n\r\nFiles expected by the code:\r\n\r\n- app_icon.ico\r\n    Used as the main application icon and for the system tray.\r\n    Path referenced from code:\r\n    - ui.floating_window.FloatingWindow._load_icons() expects: assets/icons/app_icon.ico\r\n\r\n- mic_idle.png\r\n    Microphone icon for the \"idle\" state (Готово).\r\n    Path referenced from code:\r\n    - ui.floating_window.FloatingWindow._load_icons() expects: assets/icons/mic_idle.png\r\n\r\n- mic_recording.png\r\n    Microphone icon for the \"recording\" state (Запись...).\r\n    Path referenced from code:\r\n    - ui.floating_window.FloatingWindow._load_icons() expects: assets/icons/mic_recording.png\r\n\r\n- mic_processing.png\r\n    Microphone icon for the \"processing\" state (Обработка...).\r\n    Path referenced from code:\r\n    - ui.floating_window.FloatingWindow._load_icons() expects: assets/icons/mic_processing.png\r\n\r\nSince this environment does not support binary image generation directly, you can generate or download simple icons with the following recommendations:\r\n\r\n1) app_icon.ico\r\n   - 256x256 (with downscaled sizes inside .ico: 256, 128, 64, 32, 16).\r\n   - Simple glyph: white microphone or \"VC\" letters on a dark background (#1E1E1E or #20232A).\r\n   - Transparent background outside the glyph.\r\n\r\n2) mic_idle.png\r\n   - 64x64 or 128x128 PNG with transparent background.\r\n   - Gray microphone icon (#B0B0B0) centered.\r\n\r\n3) mic_recording.png\r\n   - Same size as mic_idle.png.\r\n   - White microphone icon with a red circular background (#E53935) or red dot indicator.\r\n\r\n4) mic_processing.png\r\n   - Same size as mic_idle.png.\r\n   - White microphone icon with an orange or blue circular background (#FF9800 or #2196F3), or a small spinner/clock overlay.\r\n\r\nYou can quickly create these using any icon generator or editor (Figma, Photoshop, GIMP, online icon generators) and save them with the exact filenames above into this folder.\r\n\r\nOnce the files are placed here:\r\n- FloatingWindow will automatically pick them up for UI states.\r\n- SystemTrayIcon will use app_icon.ico as the tray icon (via the window icon)."
+        }
+    ]
+}

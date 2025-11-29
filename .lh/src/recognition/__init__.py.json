@@ -1,0 +1,18 @@
+{
+    "sourceFile": "src/recognition/__init__.py",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1764289647989,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1764289647989,
+            "name": "Commit-0",
+            "content": "from __future__ import annotations\r\n\r\nfrom typing import Protocol\r\n\r\nfrom audio.recorder import AudioData\r\nfrom config.settings import RecognitionConfig\r\nfrom recognition.groq_api import GroqWhisperRecognizer\r\n\r\n\r\nclass IRecognizer(Protocol):\r\n    def transcribe(self, audio: AudioData) -> str:  # pragma: no cover - protocol\r\n        ...\r\n\r\n\r\ndef create_recognizer(config: RecognitionConfig) -> IRecognizer:\r\n    \"\"\"\r\n    Factory for recognizers.\r\n\r\n    MVP: only Groq backend is fully implemented.\r\n    \"\"\"\r\n    backend = config.backend.lower()\r\n\r\n    if backend == \"groq\":\r\n        return GroqWhisperRecognizer(config.groq)\r\n\r\n    # Fallback: use Groq even if config says otherwise, to keep MVP working.\r\n    return GroqWhisperRecognizer(config.groq)"
+        }
+    ]
+}

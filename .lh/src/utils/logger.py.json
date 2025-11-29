@@ -1,0 +1,18 @@
+{
+    "sourceFile": "src/utils/logger.py",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1764291626714,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1764291626714,
+            "name": "Commit-0",
+            "content": "from __future__ import annotations\r\n\r\nfrom pathlib import Path\r\n\r\nfrom loguru import logger  # type: ignore[import]\r\n\r\nfrom config.settings import LoggingConfig\r\n\r\n\r\ndef setup_logging(config: LoggingConfig) -> None:\r\n    \"\"\"\r\n    Configure loguru according to LoggingConfig.\r\n\r\n    - writes to file with rotation by size\r\n    - logs to stderr\r\n    \"\"\"\r\n    logger.remove()\r\n\r\n    # Console\r\n    logger.add(\r\n        sink=lambda msg: print(msg, end=\"\"),\r\n        level=config.level.upper(),\r\n        colorize=True,\r\n        format=\"<green>{time:YYYY-MM-DD HH:mm:ss}</green> | \"\r\n        \"<level>{level: <8}</level> | \"\r\n        \"<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - \"\r\n        \"<level>{message}</level>\",\r\n    )\r\n\r\n    # File\r\n    log_path = Path(config.file)\r\n    logger.add(\r\n        log_path,\r\n        rotation=config.max_file_size,\r\n        retention=config.backup_count,\r\n        level=config.level.upper(),\r\n        encoding=\"utf-8\",\r\n        enqueue=True,\r\n        backtrace=True,\r\n        diagnose=True,\r\n    )"
+        }
+    ]
+}

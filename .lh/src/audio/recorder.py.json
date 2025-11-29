@@ -1,0 +1,18 @@
+{
+    "sourceFile": "src/audio/recorder.py",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1764289601037,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1764289601037,
+            "name": "Commit-0",
+            "content": "from __future__ import annotations\r\n\r\nimport threading\r\nimport time\r\nfrom dataclasses import dataclass\r\nfrom typing import Callable, Optional\r\n\r\nimport numpy as np\r\nimport sounddevice as sd  # type: ignore[import]\r\n\r\nfrom config.settings import AudioConfig\r\n\r\n\r\n@dataclass\r\nclass AudioData:\r\n    samples: np.ndarray\r\n    sample_rate: int\r\n    channels: int\r\n\r\n\r\nclass AudioRecorder:\r\n    \"\"\"\r\n    Simple audio recorder for MVP using sounddevice.\r\n\r\n    - Starts recording on start()\r\n    - Stops on stop() or when max_duration reached\r\n    - Returns AudioData via callback\r\n    \"\"\"\r\n\r\n    def __init__(self, config: AudioConfig) -> None:\r\n        self._config = config\r\n        self._thread: Optional[threading.Thread] = None\r\n        self._stop_event = threading.Event()\r\n        self._cancel_event = threading.Event()\r\n        self._on_finished: Optional[Callable[[AudioData], None]] = None\r\n\r\n    # ------------------------------------------------------------------ public\r\n\r\n    def start(self, on_finished: Callable[[AudioData], None]) -> None:\r\n        if self._thread and self._thread.is_alive():\r\n            return\r\n        self._on_finished = on_finished\r\n        self._stop_event.clear()\r\n        self._cancel_event.clear()\r\n        self._thread = threading.Thread(target=self._record_loop, daemon=True)\r\n        self._thread.start()\r\n\r\n    def stop(self) -> None:\r\n        self._stop_event.set()\r\n\r\n    def cancel(self) -> None:\r\n        self._cancel_event.set()\r\n        self._stop_event.set()\r\n\r\n    # ---------------------------------------------------------------- internal\r\n\r\n    def _record_loop(self) -> None:\r\n        sample_rate = self._config.sample_rate\r\n        channels = self._config.channels\r\n        max_duration = self._config.max_duration\r\n\r\n        frames: list[np.ndarray] = []\r\n        start_time = time.time()\r\n\r\n        def callback(indata, frames_count, time_info, status):  # type: ignore[no-untyped-def]\r\n            if self._stop_event.is_set() or self._cancel_event.is_set():\r\n                raise sd.CallbackStop()\r\n            frames.append(indata.copy())\r\n\r\n        try:\r\n            with sd.InputStream(\r\n                samplerate=sample_rate,\r\n                channels=channels,\r\n                dtype=\"float32\",\r\n                callback=callback,\r\n            ):\r\n                while not self._stop_event.is_set():\r\n                    if time.time() - start_time >= max_duration:\r\n                        self._stop_event.set()\r\n                        break\r\n                    time.sleep(0.05)\r\n        except sd.PortAudioError:\r\n            # In MVP we silently ignore and do nothing; later we can log and notify UI\r\n            return\r\n\r\n        if self._cancel_event.is_set():\r\n            return\r\n\r\n        if not frames:\r\n            return\r\n\r\n        data = np.concatenate(frames, axis=0)\r\n        audio = AudioData(samples=data, sample_rate=sample_rate, channels=channels)\r\n\r\n        if self._on_finished:\r\n            self._on_finished(audio)"
+        }
+    ]
+}

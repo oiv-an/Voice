@@ -1,0 +1,18 @@
+{
+    "sourceFile": ".gitignore",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1764394139897,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1764394139896,
+            "name": "Commit-0",
+            "content": "# -----------------------------------------------------------------------------\r\n# Python\r\n# -----------------------------------------------------------------------------\r\n__pycache__/\r\n*.py[cod]\r\n*.pyo\r\n*.pyd\r\n*.pdb\r\n*.so\r\n*.dll\r\n\r\n# Virtual environments\r\n.venv/\r\nvenv/\r\nenv/\r\nENV/\r\n\r\n# Build / dist\r\nbuild/\r\ndist/\r\n*.spec\r\n\r\n# Logs\r\n*.log\r\nlogs/\r\n\r\n# Byte-compiled / optimized / DLL files\r\n*.pyc\r\n*.pyo\r\n*.pyd\r\n\r\n# -----------------------------------------------------------------------------\r\n# OS / Editors\r\n# -----------------------------------------------------------------------------\r\n# Windows\r\nThumbs.db\r\nDesktop.ini\r\n\r\n# macOS\r\n.DS_Store\r\n\r\n# VSCode\r\n.vscode/\r\n.history/\r\n\r\n# JetBrains\r\n.idea/\r\n\r\n# -----------------------------------------------------------------------------\r\n# Secrets & local config\r\n# -----------------------------------------------------------------------------\r\n# Environment files\r\n.env\r\n.env.*\r\n*.env\r\n\r\n# Local config with secrets (API keys, tokens, etc.)\r\nconfig.local.yaml\r\nconfig.local.yml\r\nconfig.local.json\r\n*.local.yaml\r\n*.local.yml\r\n*.local.json\r\n\r\n# Do NOT commit real keys in default config:\r\n# - keep src/config/config.yaml generic (no real keys)\r\n# - use local overrides (config.local.yaml) which are ignored by git\r\n\r\n# Cache / models (if later added)\r\n.cache/\r\nmodels/"
+        }
+    ]
+}
