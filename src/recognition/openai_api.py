@@ -35,11 +35,18 @@ class OpenAIWhisperRecognizer:
 
     def _build_url(self) -> str:
         """
-        URL для OpenAI ASR берётся из recognition.openai.base_url,
+        URL для OpenAI ASR берётся ТОЛЬКО из recognition.openai.base_url,
         которое задаётся в настройках (поле 'OpenAI Base URL').
-        Если пользователь ничего не указал — используем дефолтный https://api.openai.com/v1.
+
+        Никакого дефолтного https://api.openai.com/v1 здесь нет:
+        если base_url пустой — это ошибка конфигурации.
         """
-        base = (self.config.base_url or "https://api.openai.com/v1").rstrip("/")
+        base = (self.config.base_url or "").strip()
+        if not base:
+            raise RuntimeError(
+                "OpenAI ASR: base_url не задан. Укажите 'OpenAI Base URL' в настройках."
+            )
+        base = base.rstrip("/")
         return f"{base}{OPENAI_TRANSCRIBE_PATH}"
 
     def transcribe(self, audio: AudioData) -> str:

@@ -54,9 +54,9 @@ class OpenAIRecognitionConfig:
     api_key: str = "sk-..."
     model: str = "whisper-1"
     # Модель для постобработки текста (LLM), чтобы не плодить отдельные блоки.
-    model_process: str = "gpt-4"
+    model_process: str = "gpt-5.1"
     language: str = "ru"
-    base_url: str = "https://api.openai.com/v1"  # кастомный/дефолтный URL
+    base_url: str = ""  # URL всегда задаётся только в config.yaml / настройках
 
 
 @dataclass
@@ -64,7 +64,7 @@ class GroqRecognitionConfig:
     api_key: str = "gsk-..."
     model: str = "whisper-large-v3"
     # Модель для постобработки текста (LLM) — одно поле рядом с моделью распознавания.
-    model_process: str = "mixtral-8x7b-32768"
+    model_process: str = "llama-3.3-70b-versatile"
     language: str = "ru"
 
 
@@ -82,13 +82,12 @@ class RecognitionConfig:
 # совместимости структуры. Модели LLM берём из recognition.*.model_process.
 @dataclass
 class GroqPostprocessConfig:
-    model: str = "mixtral-8x7b-32768"
+    model: str = "llama-3.3-70b-versatile"
 
 
 @dataclass
 class OpenAIPostprocessConfig:
-    model: str = "gpt-4"
-    base_url: str = "https://api.openai.com/v1"  # кастомный/дефолтный URL
+    model: str = "gpt-5.1"
 
 
 @dataclass
@@ -104,7 +103,8 @@ class PostprocessConfig:
 class UIConfig:
     always_on_top: bool = True
     opacity: float = 0.8
-    window_size: tuple[int, int] = (120, 120)
+    # Дефолтный размер окна: 600x500
+    window_size: tuple[int, int] = (600, 500)
     auto_hide_after_paste: bool = True
     hide_delay: int = 2000  # ms
 
@@ -132,65 +132,69 @@ class AppSettings:
     @classmethod
     def load_default(cls) -> "AppSettings":
         """
-        Load settings from src/config/config.yaml and optionally
-        src/config/config.local.yaml (local overrides).
+        Единая загрузка настроек из ОДНОГО файла config.yaml.
 
-        The merge strategy is:
-        - Load base config.yaml (if present).
-        - Load config.local.yaml (if present).
-        - Deep-merge: values from config.local.yaml override config.yaml.
-        - Apply dataclass defaults for any missing fields.
+        Логика:
+
+        1. Определяем base_dir:
+           - если PyInstaller EXE: папка exe;
+           - иначе: корень проекта (двумя уровнями выше этого файла).
+
+        2. Файл настроек: base_dir/config.yaml
+           - если файла нет — создаём его с дефолтами из датаклассов.
+
+        3. Загружаем config.yaml и маппим в AppSettings.
         """
-        base_dir = Path(__file__).resolve().parents[2]
-        config_dir = base_dir / "src" / "config"
-        config_path = config_dir / "config.yaml"
-        local_config_path = config_dir / "config.local.yaml"
+        import sys
 
-        # If there is no base config at all, fall back to pure defaults.
+        if getattr(sys, "frozen", False):
+            base_dir = Path(sys.executable).resolve().parent
+        else:
+            base_dir = Path(__file__).resolve().parents[2]
+
+        config_path = base_dir / "config.yaml"
+
+        # Если файла нет — создаём дефолтный config.yaml
         if not config_path.exists():
-            return cls(
-                app=AppInfoConfig(),
-                hotkeys=HotkeysConfig(),
-                audio=AudioConfig(),
-                recognition=RecognitionConfig(),
-                postprocess=PostprocessConfig(),
-                ui=UIConfig(),
-                logging=LoggingConfig(),
-            )
+            default = {
+                "app": AppInfoConfig().__dict__,
+                "hotkeys": HotkeysConfig().__dict__,
+                "audio": AudioConfig().__dict__,
+                "recognition": {
+                    "backend": RecognitionConfig().backend,
+                    "local": LocalRecognitionConfig().__dict__,
+                    "openai": OpenAIRecognitionConfig().__dict__,
+                    "groq": GroqRecognitionConfig().__dict__,
+                },
+                "postprocess": {
+                    "enabled": PostprocessConfig().enabled,
+                    "mode": PostprocessConfig().mode,
+                    "llm_backend": PostprocessConfig().llm_backend,
+                    "groq": {"model": GroqPostprocessConfig().model},
+                    "openai": {
+                        "model": OpenAIPostprocessConfig().model,
+                    },
+                },
+                "ui": UIConfig().__dict__,
+                "logging": LoggingConfig().__dict__,
+            }
+            try:
+                with config_path.open("w", encoding="utf-8") as f:
+                    yaml.safe_dump(default, f, allow_unicode=True, sort_keys=False)
+            except Exception:
+                # Если не удалось записать файл — просто вернём дефолтные настройки
+                return cls(
+                    app=AppInfoConfig(),
+                    hotkeys=HotkeysConfig(),
+                    audio=AudioConfig(),
+                    recognition=RecognitionConfig(),
+                    postprocess=PostprocessConfig(),
+                    ui=UIConfig(),
+                    logging=LoggingConfig(),
+                )
 
-        def _load_yaml(path: Path) -> Dict[str, Any]:
-            if not path.exists():
-                return {}
-            with path.open("r", encoding="utf-8") as f:
-                return yaml.safe_load(f) or {}
-
-        def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
-            """
-            Recursively merge two dicts.
-
-            - base: original data (e.g. from config.yaml)
-            - override: local overrides (e.g. from config.local.yaml)
-
-            Values from override take precedence. Nested dicts are merged
-            recursively; other types are replaced.
-            """
-            result: Dict[str, Any] = dict(base)
-            for key, value in (override or {}).items():
-                if (
-                    key in result
-                    and isinstance(result[key], dict)
-                    and isinstance(value, dict)
-                ):
-                    result[key] = _deep_merge(result[key], value)
-                else:
-                    result[key] = value
-            return result
-
-        base_raw: Dict[str, Any] = _load_yaml(config_path)
-        local_raw: Dict[str, Any] = _load_yaml(local_config_path)
-
-        # Local config overrides base config.
-        raw: Dict[str, Any] = _deep_merge(base_raw, local_raw)
+        with config_path.open("r", encoding="utf-8") as f:
+            raw: Dict[str, Any] = yaml.safe_load(f) or {}
 
         def get_section(name: str, default: Dict[str, Any]) -> Dict[str, Any]:
             section = raw.get(name, {}) or {}
@@ -226,9 +230,9 @@ class AppSettings:
         groq_post_raw = post_raw.get("groq", {}) or {}
         openai_post_raw = post_raw.get("openai", {}) or {}
 
-        # Старые поля api_key/model в postprocess.* игнорируем — ключи и модели
-        # живут в recognition.*.api_key / recognition.*.model_process.
-        for k in ("api_key",):
+        # Старые поля api_key/model/model_process/base_url в postprocess.* игнорируем —
+        # ключи, модели и URL живут в recognition.*.
+        for k in ("api_key", "model", "model_process", "base_url"):
             if k in groq_post_raw:
                 groq_post_raw.pop(k, None)
             if k in openai_post_raw:
@@ -246,8 +250,17 @@ class AppSettings:
             ),
         )
 
-        ui_cfg = UIConfig(**get_section("ui", UIConfig().__dict__))
-        logging_cfg = LoggingConfig(**get_section("logging", LoggingConfig().__dict__))
+        # UI: дополнительно фильтруем устаревшие/лишние поля (width/height/compact_mode)
+        ui_raw = get_section("ui", UIConfig().__dict__)
+        for k in ("width", "height", "compact_mode"):
+            ui_raw.pop(k, None)
+        ui_cfg = UIConfig(**ui_raw)
+
+        # Logging: фильтруем устаревшие поля (log_dir и т.п.), чтобы не падать
+        logging_raw = get_section("logging", LoggingConfig().__dict__)
+        for k in ("log_dir",):
+            logging_raw.pop(k, None)
+        logging_cfg = LoggingConfig(**logging_raw)
 
         return cls(
             app=app_cfg,
@@ -264,10 +277,20 @@ class AppSettings:
     @classmethod
     def save_default(cls, settings: "AppSettings") -> None:
         """
-        Save current settings back to src/config/config.yaml.
+        Сохранить ВСЕ текущие настройки в ОДИН файл config.yaml в base_dir.
+
+        - Тот же base_dir, что и в load_default().
+        - Никаких config.local.yaml, никаких src/config/config.yaml.
+        - Этот файл должен быть добавлен в .gitignore и не коммититься.
         """
-        base_dir = Path(__file__).resolve().parents[2]
-        config_path = base_dir / "src" / "config" / "config.yaml"
+        import sys
+
+        if getattr(sys, "frozen", False):
+            base_dir = Path(sys.executable).resolve().parent
+        else:
+            base_dir = Path(__file__).resolve().parents[2]
+
+        config_path = base_dir / "config.yaml"
 
         data: Dict[str, Any] = {
             "app": settings.app.__dict__,
@@ -283,11 +306,9 @@ class AppSettings:
                 "enabled": settings.postprocess.enabled,
                 "mode": settings.postprocess.mode,
                 "llm_backend": settings.postprocess.llm_backend,
-                # В groq/openai больше нет своих api_key — только модель и base_url.
                 "groq": {"model": settings.postprocess.groq.model},
                 "openai": {
                     "model": settings.postprocess.openai.model,
-                    "base_url": settings.postprocess.openai.base_url,
                 },
             },
             "ui": settings.ui.__dict__,

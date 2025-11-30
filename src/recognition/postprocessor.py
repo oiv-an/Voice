@@ -115,22 +115,25 @@ class TextPostprocessor:
         ВАЖНО:
         - ключ берём из self.config.groq.api_key, который должен быть
           прокинут из recognition.groq.api_key;
-        - модель LLM берём из recognition.groq.model_process.
+        - модель LLM берём ТОЛЬКО из recognition.groq.model_process.
         """
         api_key = (getattr(self.config.groq, "api_key", "") or "").strip()
-        # model_process живёт в RecognitionConfig.groq, но для обратной
-        # совместимости оставляем fallback на postprocess.groq.model.
-        # Groq деактивировал mixtral-8x7b-32768. По умолчанию используем
-        # актуальную модель, если в конфиге не задано иное.
-        model = (
-            getattr(self.config.groq, "model_process", "") or
-            self.config.groq.model or
-            "llama-3.3-70b-versatile"
-        ).strip()
+        # Модель LLM Groq берём только из recognition.groq.model_process.
+        # Никаких fallback'ов на postprocess.groq.model и жёстких дефолтов.
+        model = getattr(self.config.groq, "model_process", "") or ""
+        model = model.strip()
 
         if not api_key:
             raise RuntimeError("Groq LLM: API‑ключ не задан.")
+        if not model:
+            raise RuntimeError(
+                "Groq LLM: модель не задана. Укажите модель в настройках (поле Groq LLM model)."
+            )
 
+        logger.info("Groq LLM postprocess using model: {}", model)
+
+        # Базовый URL для LLM Groq должен быть тем же, что и для транскрибации:
+        # единый публичный endpoint Groq OpenAI-совместимого API.
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -212,19 +215,25 @@ class TextPostprocessor:
 
         ВАЖНО:
         - ключ всегда берём из recognition.openai.api_key, который SettingsDialog пишет в config.yaml;
-        - если ключ пустой — сразу даём понятную ошибку, без сетевых запросов.
+        - модель берём из recognition.openai.model_process (с fallback на recognition.openai.model);
+        - base_url берём ТОЛЬКО из recognition.openai.base_url;
+        - блок postprocess.openai НЕ содержит ни ключа, ни base_url.
         """
+        # Ключ и модель/URL приходят из recognition.openai.*,
+        # которые App и SettingsDialog прокидывают в config.postprocess.openai
+        # как "прозрачный" контейнер.
         api_key = (getattr(self.config.openai, "api_key", "") or "").strip()
-        # Модель для постобработки берём из recognition.openai.model_process,
-        # с fallback на postprocess.openai.model.
-        model = (
-            getattr(self.config.openai, "model_process", "") or
-            self.config.openai.model or
-            "gpt-5.1"
-        ).strip()
-        # URL для LLM берём из того же поля, что и для ASR: recognition.openai.base_url
-        # (SettingsDialog пишет его в config.yaml). Если пусто — дефолтный OpenAI endpoint.
-        base_url = (self.config.openai.base_url or "https://api.openai.com/v1").strip()
+        model = (getattr(self.config.openai, "model_process", "") or "").strip()
+        if not model:
+            # Fallback на основную модель OpenAI ASR, если отдельная LLM‑модель не задана.
+            model = (getattr(self.config.openai, "model", "") or "").strip()
+
+        base_url = (getattr(self.config.openai, "base_url", "") or "").strip()
+
+        if not base_url:
+            raise RuntimeError(
+                "OpenAI LLM: base_url не задан. Укажите 'OpenAI Base URL' в настройках."
+            )
 
         if not api_key:
             raise RuntimeError(
@@ -232,8 +241,16 @@ class TextPostprocessor:
                 "Заполните поле 'OpenAI API key' в настройках и сохраните."
             )
 
+        if not model:
+            raise RuntimeError(
+                "OpenAI LLM: модель не задана. Укажите модель в настройках (поле OpenAI postprocess model)."
+            )
+
         # Совместимый с OpenAI / proxy формат /chat/completions
         url = base_url.rstrip("/") + "/chat/completions"
+        logger.info("OpenAI LLM postprocess URL: {}", url)
+        logger.info("OpenAI LLM postprocess using model: {}", model)
+        logger.info("OpenAI LLM postprocess using api_key (first 8 chars): {}***", api_key[:8])
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",

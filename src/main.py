@@ -1,4 +1,5 @@
 import sys
+from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtWidgets import QApplication
@@ -27,8 +28,18 @@ class App:
     def __init__(self) -> None:
         self.qt_app = QApplication(sys.argv)
 
-        # Load settings and logging
-        self.settings = AppSettings.load_default()
+        # Определяем базовую директорию приложения:
+        # - в dev-режиме: корень проекта (родитель src)
+        # - в собранном .exe: папка, где лежит exe
+        if getattr(sys, "frozen", False):
+            # PyInstaller / frozen
+            self.base_dir = Path(sys.executable).resolve().parent
+        else:
+            # Обычный запуск из исходников
+            self.base_dir = Path(__file__).resolve().parents[1]
+
+        # Load settings and logging (с учётом base_dir и config.local.yaml)
+        self.settings = self._load_or_init_settings()
         setup_logging(self.settings.logging)
 
         # Core components
@@ -39,7 +50,7 @@ class App:
         self.recognizer = create_recognizer(self.settings.recognition)
 
         # Постпроцессинг текста.
-        # ВАЖНО: сразу прокидываем в postprocess.* тот же ключ и model_process,
+        # ВАЖНО: сразу прокидываем в postprocess.* тот же ключ, model_process и base_url,
         # что и в recognition.*, чтобы LLM работал уже при первом запуске.
         post_cfg = self.settings.postprocess
         rec_cfg = self.settings.recognition
@@ -54,8 +65,11 @@ class App:
         if (post_cfg.llm_backend or "").lower() == "openai":
             # ключ для LLM всегда берём из поля OpenAI API key (recognition.openai.api_key)
             setattr(post_cfg.openai, "api_key", rec_cfg.openai.api_key)
+            # модель LLM
             if not getattr(post_cfg.openai, "model_process", ""):
                 setattr(post_cfg.openai, "model_process", rec_cfg.openai.model_process)
+            # базовый URL LLM = тот же, что и у ASR
+            setattr(post_cfg.openai, "base_url", rec_cfg.openai.base_url)
 
         self.postprocessor = TextPostprocessor(post_cfg)
 
@@ -153,6 +167,8 @@ class App:
             setattr(post_cfg.openai, "api_key", rec_cfg.openai.api_key)
             if not getattr(post_cfg.openai, "model_process", ""):
                 setattr(post_cfg.openai, "model_process", rec_cfg.openai.model_process)
+            # базовый URL LLM = тот же, что и у ASR
+            setattr(post_cfg.openai, "base_url", rec_cfg.openai.base_url)
 
         self.postprocessor = TextPostprocessor(post_cfg)
 
@@ -333,11 +349,109 @@ class App:
         # Placeholder: will reconfigure logging level later
         self.window.show_message("Toggle debug (not fully implemented yet).")
 
-    # ----------------------------------------------------------- Settings save
-    # Встроенный обработчик сохранения панели настроек больше не нужен:
-    # всё делает open_settings_dialog() через SettingsDialog.
-    def _on_settings_save_requested(self) -> None:
-        return
+    # ----------------------------------------------------------- Settings / config helpers
+
+    def _load_or_init_settings(self) -> AppSettings:
+        """
+        Загрузка настроек с учётом портативного режима.
+
+        Логика:
+        - Ищем config.yaml в self.base_dir (рядом с exe или в корне проекта).
+        - Если файла нет — создаём минимальный config.yaml с backend=local.
+        - Затем вызываем AppSettings.load_default(), который уже умеет
+          подмешивать config.local.yaml поверх config.yaml.
+        """
+        config_path = self.base_dir / "config.yaml"
+
+        if not config_path.exists():
+            # Минимальный конфиг по умолчанию: локальный backend, безопасные значения.
+            default_config = {
+                "app": {
+                    "name": "VoiceCapture",
+                    "version": "0.1.0",
+                },
+                "hotkeys": {
+                    "record": "ctrl+win",
+                    "cancel": "esc",
+                    "toggle_window": "ctrl+alt+s",
+                    "toggle_debug": "ctrl+alt+d",
+                },
+                "audio": {
+                    "sample_rate": 16000,
+                    "channels": 1,
+                    "max_duration": 120,
+                },
+                "recognition": {
+                    "backend": "local",
+                    "local": {
+                        "model": "large-v3",
+                        "device": "cuda",
+                        "compute_type": "float16",
+                        "language": "ru",
+                        "beam_size": 5,
+                        "temperature": 0.0,
+                    },
+                    "openai": {
+                        "api_key": "",
+                        "model": "whisper-1",
+                        "model_process": "gpt-4o-mini",
+                        "language": "ru",
+                        # base_url намеренно оставляем пустым, чтобы пользователь
+                        # задал его в настройках (OpenAI Base URL).
+                        "base_url": "",
+                    },
+                    "groq": {
+                        "api_key": "",
+                        "model": "whisper-large-v3",
+                        "model_process": "llama-3.3-70b-versatile",
+                        "language": "ru",
+                    },
+                },
+                # Блок postprocess больше не хранит ключи / base_url.
+                # Здесь только включение, режим и "отображательные" модели.
+                "postprocess": {
+                    "enabled": True,
+                    "mode": "llm",
+                    "llm_backend": "groq",
+                    "groq": {
+                        "model": "llama-3.3-70b-versatile",
+                    },
+                    "openai": {
+                        "model": "gpt-5.1",
+                    },
+                },
+                "ui": {
+                    # Старые поля width/height/compact_mode больше не используются,
+                    # но при первой генерации конфига запишем их для обратной совместимости.
+                    "width": 320,
+                    "height": 200,
+                    "opacity": 0.9,
+                    "compact_mode": False,
+                },
+                "logging": {
+                    "level": "INFO",
+                    "log_dir": "logs",
+                },
+            }
+
+            try:
+                import yaml
+
+                with config_path.open("w", encoding="utf-8") as f:
+                    yaml.safe_dump(default_config, f, allow_unicode=True, sort_keys=False)
+            except Exception:
+                # Если по какой-то причине не удалось записать файл — продолжаем
+                # с дефолтами из dataclass'ов AppSettings.
+                pass
+
+        # Теперь загружаем настройки стандартным способом:
+        settings = AppSettings.load_default()
+
+        # Гарантируем, что backend задан
+        if not getattr(settings.recognition, "backend", None):
+            settings.recognition.backend = "local"
+
+        return settings
 
     # -------------------------------------------------------------- Lifecycle
 

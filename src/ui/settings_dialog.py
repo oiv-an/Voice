@@ -204,8 +204,9 @@ class SettingsDialog(QDialog):
         if idx_llm != -1:
             self.post_backend_combo.setCurrentIndex(idx_llm)
 
-        self.groq_llm_model_edit.setText(settings.postprocess.groq.model)
-        self.openai_llm_model_edit.setText(settings.postprocess.openai.model)
+        # Модели LLM берём из recognition.*.model_process — это единственный источник правды.
+        self.groq_llm_model_edit.setText(settings.recognition.groq.model_process)
+        self.openai_llm_model_edit.setText(settings.recognition.openai.model_process)
 
         # раньше здесь вызывался _on_backend_changed(), который скрывал поля ключей.
         # теперь все поля всегда видимы, поэтому вызов не нужен.
@@ -223,6 +224,11 @@ class SettingsDialog(QDialog):
         groq_llm_model = self.groq_llm_model_edit.text().strip()
         openai_llm_model = self.openai_llm_model_edit.text().strip()
 
+        # Обновляем recognition:
+        # - ASR‑модели (model) берём из полей ASR.
+        # - LLM‑модели для постпроцессинга:
+        #     * Groq: пишем в recognition.groq.model_process
+        #     * OpenAI: пишем в recognition.openai.model_process
         new_recognition = RecognitionConfig(
             backend=backend,
             local=old.recognition.local,
@@ -231,14 +237,19 @@ class SettingsDialog(QDialog):
                 api_key=self.openai_api_key_edit.text().strip(),
                 base_url=self.openai_base_url_edit.text().strip(),
                 model=openai_asr_model or old.recognition.openai.model,
+                model_process=openai_llm_model or old.recognition.openai.model_process,
             ),
             groq=replace(
                 old.recognition.groq,
                 api_key=self.groq_api_key_edit.text().strip(),
                 model=groq_asr_model or old.recognition.groq.model,
+                model_process=groq_llm_model or old.recognition.groq.model_process,
             ),
         )
 
+        # Блок postprocess больше не является источником правды для моделей LLM.
+        # Держим его только как "отображение" текущих значений (для обратной совместимости),
+        # но в рантайме TextPostprocessor берёт модели из recognition.*.model_process.
         new_postprocess = replace(
             old.postprocess,
             enabled=self.post_enabled_checkbox.isChecked(),
