@@ -148,83 +148,10 @@ class FloatingWindow(QWidget):
         main_layout.addWidget(self.processed_label)
         main_layout.addWidget(self.status_label)
 
-        # ---------- панель настроек (режим "settings") ----------
-        self.settings_backend_combo = QComboBox()
-        self.settings_backend_combo.addItem("Groq", userData="groq")
-        self.settings_backend_combo.addItem("OpenAI", userData="openai")
-        self.settings_backend_combo.addItem("Local (GigaAM)", userData="local")
-
-        self.settings_groq_key = QLineEdit()
-        self.settings_groq_key.setEchoMode(QLineEdit.EchoMode.Password)
-
-        self.settings_openai_key = QLineEdit()
-        self.settings_openai_key.setEchoMode(QLineEdit.EchoMode.Password)
-
-        self.settings_openai_url = QLineEdit()
-
-        # постпроцессинг
-        self.postprocess_enabled_checkbox = QCheckBox("Включить постпроцессинг")
-        self.postprocess_enabled_checkbox.setChecked(True)
-        # сделать текст чекбокса белым, как у остальных QLabel
-        self.postprocess_enabled_checkbox.setStyleSheet("color: white;")
-
-        self.postprocess_groq_model = QLineEdit()
-        self.postprocess_openai_model = QLineEdit()
-
-        form = QFormLayout()
-        form.addRow("Сервис распознавания:", self.settings_backend_combo)
-        form.addRow("Groq API key:", self.settings_groq_key)
-        form.addRow("OpenAI API key:", self.settings_openai_key)
-        form.addRow("OpenAI Base URL:", self.settings_openai_url)
-        form.addRow(self.postprocess_enabled_checkbox)
-        form.addRow("Groq postprocess model:", self.postprocess_groq_model)
-        form.addRow("OpenAI postprocess model:", self.postprocess_openai_model)
-
-        self.settings_save_button = QPushButton("Сохранить")
-        self.settings_save_button.clicked.connect(self._on_settings_save_clicked)
-
-        self.settings_cancel_button = QPushButton("Отмена")
-        self.settings_cancel_button.clicked.connect(self._on_settings_cancel_clicked)
-
-        buttons_layout = QHBoxLayout()
-        buttons_layout.addStretch()
-        buttons_layout.addWidget(self.settings_save_button)
-        buttons_layout.addWidget(self.settings_cancel_button)
-
-        settings_page = QWidget()
-        settings_layout = QVBoxLayout(settings_page)
-        settings_layout.setContentsMargins(6, 6, 6, 6)
-        settings_layout.setSpacing(6)
-
-        # отдельная верхняя панель для настроек (своими кнопками)
-        self.settings_menu_button = QPushButton("⚙️")
-        self.settings_menu_button.setFixedSize(24, 24)
-        self.settings_menu_button.clicked.connect(self._on_menu_clicked)
-
-        self.settings_compact_button = QPushButton("▢")
-        self.settings_compact_button.setFixedSize(24, 24)
-        self.settings_compact_button.clicked.connect(self._on_compact_clicked)
-
-        self.settings_close_button = QPushButton("✖️")
-        self.settings_close_button.setFixedSize(24, 24)
-        self.settings_close_button.clicked.connect(self._on_close_clicked)
-
-        settings_top_layout = QHBoxLayout()
-        settings_top_layout.setContentsMargins(4, 4, 4, 4)
-        settings_top_layout.setSpacing(4)
-        settings_top_layout.addWidget(self.settings_menu_button)
-        settings_top_layout.addStretch()
-        settings_top_layout.addWidget(self.settings_compact_button)
-        settings_top_layout.addWidget(self.settings_close_button)
-
-        settings_layout.addLayout(settings_top_layout)
-        settings_layout.addLayout(form)
-        settings_layout.addLayout(buttons_layout)
-
         # ---------- стек страниц ----------
+        # Встроенную панель настроек убрали: настройки открываются отдельным диалогом.
         self._stack = QStackedLayout()
-        self._stack.addWidget(main_page)      # index 0: main
-        self._stack.addWidget(settings_page)  # index 1: settings
+        self._stack.addWidget(main_page)  # index 0: main
 
         container = QWidget()
         container.setLayout(self._stack)
@@ -350,12 +277,6 @@ class FloatingWindow(QWidget):
             self.close_button.setVisible(False)
             self.compact_button.setVisible(True)
 
-            # в шапке настроек тоже прячем всё, кроме compact
-            if hasattr(self, "settings_menu_button"):
-                self.settings_menu_button.setVisible(False)
-                self.settings_close_button.setVisible(False)
-                self.settings_compact_button.setVisible(True)
-
             # включаем иконку
             self.icon_label.setVisible(True)
 
@@ -369,11 +290,6 @@ class FloatingWindow(QWidget):
             self.menu_button.setVisible(True)
             self.close_button.setVisible(True)
             self.compact_button.setVisible(True)
-
-            if hasattr(self, "settings_menu_button"):
-                self.settings_menu_button.setVisible(True)
-                self.settings_close_button.setVisible(True)
-                self.settings_compact_button.setVisible(True)
 
             # верхняя иконка в обычном режиме не нужна
             self.icon_label.setVisible(False)
@@ -405,38 +321,6 @@ class FloatingWindow(QWidget):
         """Показать текст после постпроцессинга (нижний блок)."""
         self.processed_label.setText(text or "")
 
-    # ------------------------------------------------------------------ settings mode
-
-    def _enter_settings_mode(self) -> None:
-        """Показать панель настроек внутри этого же окна.
-
-        ВАЖНО: здесь мы не читаем config.yaml и не трогаем AppSettings.
-        Все реальные значения (backend, ключи, модели) заполняет App.open_settings_dialog().
-        Эта функция только переключает страницу.
-        """
-        self._content_mode = "settings"
-        self._stack.setCurrentIndex(1)
-
-    def leave_settings_mode(self) -> None:
-        """Вернуться в основной режим отображения."""
-        self._content_mode = "main"
-        self._stack.setCurrentIndex(0)
-
-    def _on_settings_save_clicked(self) -> None:
-        """
-        Пользователь нажал «Сохранить» в панели настроек.
-        Отправляем сигнал наверх (в App), чтобы он:
-        - прочитал значения из полей,
-        - сохранил их в config.yaml,
-        - пересоздал recognizer/postprocessor.
-        """
-        self.settings_save_requested.emit()
-        self.leave_settings_mode()
-
-    def _on_settings_cancel_clicked(self) -> None:
-        """Отмена изменений и возврат в основной режим."""
-        self.leave_settings_mode()
-
     # ------------------------------------------------------------------ events
 
     def _on_menu_clicked(self) -> None:
@@ -444,14 +328,8 @@ class FloatingWindow(QWidget):
         Клик по иконке ⚙️.
 
         Поведение:
-        - если сейчас основной режим (main) → открыть настройки (как раньше);
-        - если уже открыта панель настроек → свернуть её, как будто нажали «Отмена».
+        - всегда просим верхний уровень (App) открыть диалог настроек.
         """
-        if self._content_mode == "settings":
-            # Поведение как у кнопки «Отмена»
-            self._on_settings_cancel_clicked()
-            return
-
         self.settings_requested.emit()
 
     def _on_compact_clicked(self) -> None:
@@ -481,6 +359,6 @@ class FloatingWindow(QWidget):
 
     def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
-            # двойной клик по окну — тоже открыть настройки
-            self._enter_settings_mode()
+            # двойной клик по окну — тоже запросить открытие настроек
+            self.settings_requested.emit()
         super().mouseDoubleClickEvent(event)

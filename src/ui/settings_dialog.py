@@ -3,14 +3,13 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Optional
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPalette, QColor
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
-    QGridLayout,
+    QGroupBox,
     QLabel,
     QLineEdit,
     QVBoxLayout,
@@ -22,16 +21,12 @@ from config.settings import AppSettings, RecognitionConfig
 
 class SettingsDialog(QDialog):
     """
-    Простое окно настроек для выбора backend'а распознавания и ввода ключей/URL.
+    Окно настроек распознавания и постобработки.
 
-    Что есть:
-    - Выпадающий список backend'ов: Groq / OpenAI.
-    - Для Groq: поле API key.
-    - Для OpenAI: поля API key и Base URL.
-    - Кнопки OK / Cancel.
-
-    Диалог работает поверх текущего AppSettings и возвращает обновлённый
-    экземпляр настроек через метод get_result().
+    Блоки:
+    - Сервис распознавания (Groq / OpenAI) + ключи / Base URL.
+    - Модели распознавания (ASR) для Groq и OpenAI.
+    - Постобработка (LLM) + модели Groq/OpenAI для коррекции текста.
     """
 
     def __init__(self, settings: AppSettings, parent: Optional[QWidget] = None) -> None:
@@ -43,15 +38,10 @@ class SettingsDialog(QDialog):
 
         self._init_ui()
         self._load_from_settings(settings)
-        # палитру пока не трогаем, чтобы не падать; вернёмся к этому позже
 
     # ------------------------------------------------------------------ public API
 
     def get_result(self) -> Optional[AppSettings]:
-        """
-        Возвращает новый экземпляр AppSettings, если пользователь нажал OK,
-        иначе None.
-        """
         return self._result_settings
 
     # ------------------------------------------------------------------ UI
@@ -59,65 +49,114 @@ class SettingsDialog(QDialog):
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
 
-        # --- Backend selection
-        backend_layout = QFormLayout()
-        self.backend_label = QLabel("Сервис распознавания:")
+        # Сделать текст и подписи более контрастными
+        self.setStyleSheet(
+            """
+            QDialog {
+                background-color: #2b2b2b;
+                color: #f0f0f0;
+            }
+            QGroupBox {
+                color: #f0f0f0;
+                font-weight: bold;
+                border: 1px solid #555555;
+                border-radius: 4px;
+                margin-top: 8px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 8px;
+                padding: 0 4px;
+            }
+            QLabel {
+                color: #f0f0f0;
+            }
+            QLineEdit {
+                background-color: #3a3a3a;
+                color: #ffffff;
+                border: 1px solid #666666;
+                border-radius: 3px;
+                padding: 2px 4px;
+            }
+            QLineEdit:disabled {
+                background-color: #444444;
+                color: #aaaaaa;
+            }
+            QCheckBox {
+                color: #f0f0f0;
+            }
+            QComboBox {
+                background-color: #3a3a3a;
+                color: #ffffff;
+                border: 1px solid #666666;
+                border-radius: 3px;
+                padding: 2px 4px;
+            }
+            QDialogButtonBox QPushButton {
+                min-width: 70px;
+            }
+            """
+        )
+
+        # === Блок: сервис распознавания (backend + ключи) ======================
+        backend_group = QGroupBox("Сервис распознавания")
+        backend_form = QFormLayout(backend_group)
+
         self.backend_combo = QComboBox()
         self.backend_combo.addItem("Groq", userData="groq")
         self.backend_combo.addItem("OpenAI", userData="openai")
         self.backend_combo.currentIndexChanged.connect(self._on_backend_changed)
-        backend_layout.addRow(self.backend_label, self.backend_combo)
+        backend_form.addRow("Сервис распознавания:", self.backend_combo)
 
-        layout.addLayout(backend_layout)
-
-        # --- Backend-specific settings
-        self.backend_widget = QWidget()
-        backend_grid = QGridLayout(self.backend_widget)
-        backend_grid.setColumnStretch(1, 1)
-
-        # Groq controls
-        self.groq_label = QLabel("Groq API key:")
         self.groq_api_key_edit = QLineEdit()
         self.groq_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        backend_grid.addWidget(self.groq_label, 0, 0)
-        backend_grid.addWidget(self.groq_api_key_edit, 0, 1)
+        backend_form.addRow("Groq API key:", self.groq_api_key_edit)
 
-        self.groq_model_label = QLabel("Groq model:")
-        self.groq_model_edit = QLineEdit()
-        backend_grid.addWidget(self.groq_model_label, 1, 0)
-        backend_grid.addWidget(self.groq_model_edit, 1, 1)
-
-        # OpenAI controls
-        self.openai_key_label = QLabel("OpenAI API key:")
         self.openai_api_key_edit = QLineEdit()
         self.openai_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        backend_form.addRow("OpenAI API key:", self.openai_api_key_edit)
 
-        self.openai_url_label = QLabel("OpenAI Base URL:")
         self.openai_base_url_edit = QLineEdit()
+        backend_form.addRow("OpenAI Base URL:", self.openai_base_url_edit)
 
-        self.openai_model_label = QLabel("OpenAI model:")
-        self.openai_model_edit = QLineEdit()
+        layout.addWidget(backend_group)
 
-        backend_grid.addWidget(self.openai_key_label, 2, 0)
-        backend_grid.addWidget(self.openai_api_key_edit, 2, 1)
-        backend_grid.addWidget(self.openai_url_label, 3, 0)
-        backend_grid.addWidget(self.openai_base_url_edit, 3, 1)
-        backend_grid.addWidget(self.openai_model_label, 4, 0)
-        backend_grid.addWidget(self.openai_model_edit, 4, 1)
+        # === Блок: модели распознавания (ASR) ==================================
+        asr_group = QGroupBox("Модели распознавания (ASR)")
+        asr_form = QFormLayout(asr_group)
 
-        layout.addWidget(self.backend_widget)
+        self.groq_asr_model_edit = QLineEdit()
+        asr_form.addRow("Groq ASR model:", self.groq_asr_model_edit)
 
-        # --- Buttons
+        self.openai_asr_model_edit = QLineEdit()
+        asr_form.addRow("OpenAI ASR model:", self.openai_asr_model_edit)
+
+        layout.addWidget(asr_group)
+
+        # === Блок: постобработка (LLM) =========================================
+        post_group = QGroupBox("Постобработка текста (LLM)")
+        post_form = QFormLayout(post_group)
+
+        self.post_enabled_checkbox = QCheckBox("Включить постпроцессинг")
+        post_form.addRow(self.post_enabled_checkbox)
+
+        self.groq_llm_model_edit = QLineEdit()
+        post_form.addRow("Groq postprocess model:", self.groq_llm_model_edit)
+
+        self.openai_llm_model_edit = QLineEdit()
+        post_form.addRow("OpenAI postprocess model:", self.openai_llm_model_edit)
+
+        layout.addWidget(post_group)
+
+        # === Кнопки ============================================================
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)
-
         layout.addWidget(buttons)
 
         self.setLayout(layout)
-        # Увеличиваем окно настроек
         self.setMinimumWidth(600)
         self.setMinimumHeight(400)
 
@@ -127,41 +166,40 @@ class SettingsDialog(QDialog):
         rec: RecognitionConfig = settings.recognition
 
         # backend
-        backend = rec.backend.lower()
-        if backend == "groq":
-            index = self.backend_combo.findData("groq")
-        elif backend == "openai":
-            index = self.backend_combo.findData("openai")
-        else:
-            # по умолчанию groq
+        backend = (rec.backend or "groq").lower()
+        index = self.backend_combo.findData(backend) if backend in ("groq", "openai") else -1
+        if index == -1:
             index = self.backend_combo.findData("groq")
         if index != -1:
             self.backend_combo.setCurrentIndex(index)
 
-        # groq
+        # ключи / URL
         self.groq_api_key_edit.setText(rec.groq.api_key)
-        self.groq_model_edit.setText(rec.groq.model)
-
-        # openai
         self.openai_api_key_edit.setText(rec.openai.api_key)
         self.openai_base_url_edit.setText(rec.openai.base_url)
-        self.openai_model_edit.setText(rec.openai.model)
 
-        # применить видимость полей
+        # ASR‑модели
+        self.groq_asr_model_edit.setText(rec.groq.model)
+        self.openai_asr_model_edit.setText(rec.openai.model)
+
+        # LLM‑модели (постпроцессинг)
+        self.post_enabled_checkbox.setChecked(settings.postprocess.enabled)
+        self.groq_llm_model_edit.setText(settings.postprocess.groq.model)
+        self.openai_llm_model_edit.setText(settings.postprocess.openai.model)
+
         self._on_backend_changed()
 
     def _build_new_settings(self) -> AppSettings:
-        """
-        Создаёт новый экземпляр AppSettings на основе текущих значений в диалоге.
-        """
         backend_data = self.backend_combo.currentData()
         backend = str(backend_data) if backend_data is not None else "groq"
 
         old = self._original_settings
 
-        # Обновляем recognition-конфиг
-        groq_model = self.groq_model_edit.text().strip()
-        openai_model = self.openai_model_edit.text().strip()
+        groq_asr_model = self.groq_asr_model_edit.text().strip()
+        openai_asr_model = self.openai_asr_model_edit.text().strip()
+
+        groq_llm_model = self.groq_llm_model_edit.text().strip()
+        openai_llm_model = self.openai_llm_model_edit.text().strip()
 
         new_recognition = RecognitionConfig(
             backend=backend,
@@ -170,48 +208,49 @@ class SettingsDialog(QDialog):
                 old.recognition.openai,
                 api_key=self.openai_api_key_edit.text().strip(),
                 base_url=self.openai_base_url_edit.text().strip(),
-                # если поле пустое — оставляем старую модель
-                model=openai_model or old.recognition.openai.model,
+                model=openai_asr_model or old.recognition.openai.model,
             ),
             groq=replace(
                 old.recognition.groq,
                 api_key=self.groq_api_key_edit.text().strip(),
-                # если поле пустое — оставляем старую модель
-                model=groq_model or old.recognition.groq.model,
+                model=groq_asr_model or old.recognition.groq.model,
             ),
         )
 
-        new_settings = replace(
+        new_postprocess = replace(
+            old.postprocess,
+            enabled=self.post_enabled_checkbox.isChecked(),
+            groq=replace(
+                old.postprocess.groq,
+                model=groq_llm_model or old.postprocess.groq.model,
+            ),
+            openai=replace(
+                old.postprocess.openai,
+                model=openai_llm_model or old.postprocess.openai.model,
+            ),
+        )
+
+        return replace(
             old,
             recognition=new_recognition,
+            postprocess=new_postprocess,
         )
-        return new_settings
 
     # ------------------------------------------------------------------ slots
 
     def _on_backend_changed(self) -> None:
-        """
-        Показываем/скрываем поля в зависимости от выбранного backend'а.
-        """
         backend_data = self.backend_combo.currentData()
         backend = str(backend_data) if backend_data is not None else "groq"
 
         is_groq = backend == "groq"
         is_openai = backend == "openai"
 
-        # Groq: API key + model
+        # Groq поля видимы только при Groq backend
         self.groq_api_key_edit.setVisible(is_groq)
-        self.groq_model_edit.setVisible(is_groq)
-        self.groq_label.setVisible(is_groq)
-        self.groq_model_label.setVisible(is_groq)
 
-        # OpenAI: API key + Base URL + model
+        # OpenAI поля видимы только при OpenAI backend
         self.openai_api_key_edit.setVisible(is_openai)
         self.openai_base_url_edit.setVisible(is_openai)
-        self.openai_key_label.setVisible(is_openai)
-        self.openai_url_label.setVisible(is_openai)
-        self.openai_model_edit.setVisible(is_openai)
-        self.openai_model_label.setVisible(is_openai)
 
     def _on_accept(self) -> None:
         self._result_settings = self._build_new_settings()

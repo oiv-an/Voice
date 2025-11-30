@@ -89,7 +89,6 @@ class App:
 
         # Wire UI signals
         self.window.settings_requested.connect(self.open_settings_dialog)
-        self.window.settings_save_requested.connect(self._on_settings_save_requested)
         self.window.exit_requested.connect(self.quit)
         self.tray.show_window_requested.connect(self.show_window)
         self.tray.settings_requested.connect(self.open_settings_dialog)
@@ -117,44 +116,61 @@ class App:
 
     def open_settings_dialog(self) -> None:
         """
-        Открыть панель настроек внутри основного окна.
-
-        ВАЖНО: все значения берём/кладём только в config.yaml через AppSettings.
+        Открыть диалог настроек (SettingsDialog) и применить изменения.
         """
-        # показать окно
+        from ui.settings_dialog import SettingsDialog  # локальный импорт, чтобы избежать циклов
+
+        # показать основное окно, чтобы диалог был поверх
         self.show_window()
 
-        # заполнить UI текущими значениями из self.settings
-        rec = self.settings.recognition
-        post = self.settings.postprocess
+        dlg = SettingsDialog(self.settings, parent=self.window)
+        if dlg.exec() != dlg.DialogCode.Accepted:
+            return
 
-        # backend
-        backend_value = (rec.backend or "groq").lower()
-        idx = self.window.settings_backend_combo.findData(backend_value)
-        if idx >= 0:
-            self.window.settings_backend_combo.setCurrentIndex(idx)
+        new_settings = dlg.get_result()
+        if new_settings is None:
+            return
 
-        # API keys / base URL
-        self.window.settings_groq_key.setText(rec.groq.api_key or "")
-        self.window.settings_openai_key.setText(rec.openai.api_key or "")
-        self.window.settings_openai_url.setText(rec.openai.base_url or "")
+        # обновляем настройки в памяти
+        self.settings = new_settings
 
-        # postprocess
-        self.window.postprocess_enabled_checkbox.setChecked(post.enabled)
+        # сохраняем в config.yaml
+        AppSettings.save_default(self.settings)
 
-        # Если в конфиге пустые строки, подставляем дефолты,
-        # чтобы поля в UI были уже заполнены при первом открытии.
-        # По твоему запросу:
-        #   - Groq postprocess model:   mixtral-8x7b-32768
-        #   - OpenAI postprocess model: gpt-5.1
-        groq_model = (post.groq.model or "").strip() or "mixtral-8x7b-32768"
-        openai_model = (post.openai.model or "").strip() or "gpt-5.1"
+        # пересоздаём recognizer и postprocessor с учётом новых настроек
+        self.recognizer = create_recognizer(self.settings.recognition)
 
-        self.window.postprocess_groq_model.setText(groq_model)
-        self.window.postprocess_openai_model.setText(openai_model)
+        post_cfg = self.settings.postprocess
+        rec_cfg = self.settings.recognition
 
-        # переключаем окно в режим настроек
-        self.window._enter_settings_mode()
+        if (post_cfg.llm_backend or "").lower() == "groq":
+            setattr(post_cfg.groq, "api_key", rec_cfg.groq.api_key)
+            if not getattr(post_cfg.groq, "model_process", ""):
+                setattr(post_cfg.groq, "model_process", rec_cfg.groq.model_process)
+
+        if (post_cfg.llm_backend or "").lower() == "openai":
+            setattr(post_cfg.openai, "api_key", rec_cfg.openai.api_key)
+            if not getattr(post_cfg.openai, "model_process", ""):
+                setattr(post_cfg.openai, "model_process", rec_cfg.openai.model_process)
+
+        self.postprocessor = TextPostprocessor(post_cfg)
+
+        # если теперь ключи заданы — убрать предупреждающую надпись
+        backend = (self.settings.recognition.backend or "groq").lower()
+        has_key = False
+        if backend == "groq" and (self.settings.recognition.groq.api_key or "").strip():
+            has_key = True
+        elif backend == "openai" and (self.settings.recognition.openai.api_key or "").strip():
+            has_key = True
+
+        if has_key:
+            if hasattr(self.window, "set_raw_text"):
+                self.window.set_raw_text("")
+            if hasattr(self.window, "set_processed_text"):
+                self.window.set_processed_text("")
+            self.window.result_label.setText("")
+
+        self.window.show_message("Настройки сохранены.", timeout_ms=1500)
 
     # ----------------------------------------------------------------- Hotkeys
 
@@ -317,80 +333,10 @@ class App:
         self.window.show_message("Toggle debug (not fully implemented yet).")
 
     # ----------------------------------------------------------- Settings save
-
+    # Встроенный обработчик сохранения панели настроек больше не нужен:
+    # всё делает open_settings_dialog() через SettingsDialog.
     def _on_settings_save_requested(self) -> None:
-        """
-        Пользователь нажал «Сохранить» в панели настроек.
-        Читаем значения из UI, обновляем self.settings, сохраняем в config.yaml
-        и пересоздаём recognizer/postprocessor.
-        """
-        from config.settings import AppSettings  # локальный импорт, чтобы избежать циклов
-    
-        rec = self.settings.recognition
-        post = self.settings.postprocess
-    
-        # 1) backend
-        backend_data = self.window.settings_backend_combo.currentData()
-        if backend_data in ("groq", "openai", "local"):
-            rec.backend = backend_data
-    
-        # 2) API keys / base URL
-        rec.groq.api_key = self.window.settings_groq_key.text().strip() or rec.groq.api_key
-        rec.openai.api_key = self.window.settings_openai_key.text().strip() or rec.openai.api_key
-        base_url = self.window.settings_openai_url.text().strip()
-        if base_url:
-            rec.openai.base_url = base_url
-    
-        # 3) postprocess
-        post.enabled = self.window.postprocess_enabled_checkbox.isChecked()
-    
-        # модели LLM: пишем в recognition.*.model_process и синхронизируем postprocess.*.model
-        groq_model_proc = self.window.postprocess_groq_model.text().strip()
-        if groq_model_proc:
-            rec.groq.model_process = groq_model_proc
-            post.groq.model = groq_model_proc
-    
-        openai_model_proc = self.window.postprocess_openai_model.text().strip()
-        if openai_model_proc:
-            rec.openai.model_process = openai_model_proc
-            post.openai.model = openai_model_proc
-    
-        # 4) сохранить всё в config.yaml
-        AppSettings.save_default(self.settings)
-    
-        # 5) пересоздать recognizer и postprocessor
-        self.recognizer = create_recognizer(self.settings.recognition)
-    
-        post_cfg = self.settings.postprocess
-        if (post_cfg.llm_backend or "").lower() == "groq":
-            setattr(post_cfg.groq, "api_key", rec.groq.api_key)
-            if not getattr(post_cfg.groq, "model_process", ""):
-                setattr(post_cfg.groq, "model_process", rec.groq.model_process)
-        if (post_cfg.llm_backend or "").lower() == "openai":
-            setattr(post_cfg.openai, "api_key", rec.openai.api_key)
-            if not getattr(post_cfg.openai, "model_process", ""):
-                setattr(post_cfg.openai, "model_process", rec.openai.model_process)
-    
-        self.postprocessor = TextPostprocessor(post_cfg)
-    
-        # 6) если теперь ключи заданы — убрать предупреждающую надпись
-        backend = (self.settings.recognition.backend or "groq").lower()
-        has_key = False
-        if backend == "groq" and (self.settings.recognition.groq.api_key or "").strip():
-            has_key = True
-        elif backend == "openai" and (self.settings.recognition.openai.api_key or "").strip():
-            has_key = True
-    
-        if has_key:
-            # очищаем все текстовые блоки, чтобы не висело старое предупреждение
-            if hasattr(self.window, "set_raw_text"):
-                self.window.set_raw_text("")
-            if hasattr(self.window, "set_processed_text"):
-                self.window.set_processed_text("")
-            self.window.result_label.setText("")
-    
-        # 7) показать уведомление
-        self.window.show_message("Настройки сохранены.", timeout_ms=1500)
+        return
 
     # -------------------------------------------------------------- Lifecycle
 
