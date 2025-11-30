@@ -30,6 +30,14 @@ class GroqWhisperRecognizer:
     config: GroqRecognitionConfig
 
     def transcribe(self, audio: AudioData) -> str:
+        """
+        Две попытки запроса к Groq:
+        - первая сразу,
+        - вторая через 1 секунду, если первая упала по timeout / сетевой ошибке.
+        Если обе попытки неудачны — выбрасываем RuntimeError.
+        """
+        import time
+
         wav_bytes = self._audio_to_wav_bytes(audio)
 
         headers = {
@@ -45,20 +53,36 @@ class GroqWhisperRecognizer:
             "language": self.config.language,
         }
 
-        try:
-            resp = requests.post(
-                GROQ_TRANSCRIBE_URL,
-                headers=headers,
-                files=files,
-                data=data,
-                timeout=60,
-            )
-        except requests.Timeout as exc:  # type: ignore[attr-defined]
-            logger.exception("Groq request timeout: {}", exc)
-            raise RuntimeError("Groq: превышено время ожидания ответа.") from exc
-        except requests.RequestException as exc:  # type: ignore[attr-defined]
-            logger.exception("Groq network error: {}", exc)
-            raise RuntimeError("Groq: сетевая ошибка при обращении к API.") from exc
+        last_exc: Exception | None = None
+
+        for attempt in (1, 2):
+            try:
+                logger.info("Groq request attempt {} to {}", attempt, GROQ_TRANSCRIBE_URL)
+                resp = requests.post(
+                    GROQ_TRANSCRIBE_URL,
+                    headers=headers,
+                    files=files,
+                    data=data,
+                    timeout=60,
+                )
+                # Если дошли до сюда — HTTP-запрос выполнен, выходим из цикла
+                break
+            except requests.Timeout as exc:  # type: ignore[attr-defined]
+                logger.exception("Groq request timeout (attempt {}): {}", attempt, exc)
+                last_exc = exc
+            except requests.RequestException as exc:  # type: ignore[attr-defined]
+                logger.exception("Groq network error (attempt {}): {}", attempt, exc)
+                last_exc = exc
+
+            if attempt == 1:
+                # Пауза 1 секунда перед второй попыткой
+                time.sleep(1.0)
+
+        # Если обе попытки не удались — поднимаем осмысленную ошибку
+        if last_exc is not None and "resp" not in locals():
+            if isinstance(last_exc, requests.Timeout):  # type: ignore[attr-defined]
+                raise RuntimeError("Groq: превышено время ожидания ответа.") from last_exc
+            raise RuntimeError("Groq: сетевая ошибка при обращении к API.") from last_exc
 
         # HTTP-ошибки обрабатываем с разными сообщениями
         if resp.status_code == 401:

@@ -6,6 +6,7 @@ from audio.recorder import AudioData
 from config.settings import RecognitionConfig
 from recognition.groq_api import GroqWhisperRecognizer
 from recognition.gigaam_local import GigaAMRecognizer
+from recognition.openai_api import OpenAIWhisperRecognizer
 
 
 class IRecognizer(Protocol):
@@ -19,17 +20,20 @@ def create_recognizer(config: RecognitionConfig) -> IRecognizer:
 
     Поддерживаем три backend'а:
       - "groq"   — облачный Groq Whisper
-      - "openai" — (зарезервировано, можно добавить позже)
+      - "openai" — облачный OpenAI Whisper
       - "local"  — локальный GigaAM-v3-CTC (v2_ctc)
     """
     backend = (config.backend or "groq").lower()
 
     if backend == "local":
-        # Локальный GigaAM, модель фиксированная: v2_ctc
-        return GigaAMRecognizer(model_name="v2_ctc")
+        # Локальный GigaAM-v3 e2e_rnnt через HuggingFace
+        return GigaAMRecognizer()
 
     if backend == "groq":
         return GroqWhisperRecognizer(config.groq)
+
+    if backend == "openai":
+        return OpenAIWhisperRecognizer(config.openai)
 
     # Fallback: по умолчанию Groq
     return GroqWhisperRecognizer(config.groq)

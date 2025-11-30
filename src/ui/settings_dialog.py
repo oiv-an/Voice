@@ -82,6 +82,11 @@ class SettingsDialog(QDialog):
         backend_grid.addWidget(self.groq_label, 0, 0)
         backend_grid.addWidget(self.groq_api_key_edit, 0, 1)
 
+        self.groq_model_label = QLabel("Groq model:")
+        self.groq_model_edit = QLineEdit()
+        backend_grid.addWidget(self.groq_model_label, 1, 0)
+        backend_grid.addWidget(self.groq_model_edit, 1, 1)
+
         # OpenAI controls
         self.openai_key_label = QLabel("OpenAI API key:")
         self.openai_api_key_edit = QLineEdit()
@@ -90,10 +95,15 @@ class SettingsDialog(QDialog):
         self.openai_url_label = QLabel("OpenAI Base URL:")
         self.openai_base_url_edit = QLineEdit()
 
-        backend_grid.addWidget(self.openai_key_label, 1, 0)
-        backend_grid.addWidget(self.openai_api_key_edit, 1, 1)
-        backend_grid.addWidget(self.openai_url_label, 2, 0)
-        backend_grid.addWidget(self.openai_base_url_edit, 2, 1)
+        self.openai_model_label = QLabel("OpenAI model:")
+        self.openai_model_edit = QLineEdit()
+
+        backend_grid.addWidget(self.openai_key_label, 2, 0)
+        backend_grid.addWidget(self.openai_api_key_edit, 2, 1)
+        backend_grid.addWidget(self.openai_url_label, 3, 0)
+        backend_grid.addWidget(self.openai_base_url_edit, 3, 1)
+        backend_grid.addWidget(self.openai_model_label, 4, 0)
+        backend_grid.addWidget(self.openai_model_edit, 4, 1)
 
         layout.addWidget(self.backend_widget)
 
@@ -107,7 +117,9 @@ class SettingsDialog(QDialog):
         layout.addWidget(buttons)
 
         self.setLayout(layout)
-        self.setMinimumWidth(420)
+        # Увеличиваем окно настроек
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(400)
 
     # ------------------------------------------------------------------ load/save
 
@@ -128,10 +140,12 @@ class SettingsDialog(QDialog):
 
         # groq
         self.groq_api_key_edit.setText(rec.groq.api_key)
+        self.groq_model_edit.setText(rec.groq.model)
 
         # openai
         self.openai_api_key_edit.setText(rec.openai.api_key)
         self.openai_base_url_edit.setText(rec.openai.base_url)
+        self.openai_model_edit.setText(rec.openai.model)
 
         # применить видимость полей
         self._on_backend_changed()
@@ -146,6 +160,9 @@ class SettingsDialog(QDialog):
         old = self._original_settings
 
         # Обновляем recognition-конфиг
+        groq_model = self.groq_model_edit.text().strip()
+        openai_model = self.openai_model_edit.text().strip()
+
         new_recognition = RecognitionConfig(
             backend=backend,
             local=old.recognition.local,
@@ -153,10 +170,14 @@ class SettingsDialog(QDialog):
                 old.recognition.openai,
                 api_key=self.openai_api_key_edit.text().strip(),
                 base_url=self.openai_base_url_edit.text().strip(),
+                # если поле пустое — оставляем старую модель
+                model=openai_model or old.recognition.openai.model,
             ),
             groq=replace(
                 old.recognition.groq,
                 api_key=self.groq_api_key_edit.text().strip(),
+                # если поле пустое — оставляем старую модель
+                model=groq_model or old.recognition.groq.model,
             ),
         )
 
@@ -178,12 +199,19 @@ class SettingsDialog(QDialog):
         is_groq = backend == "groq"
         is_openai = backend == "openai"
 
-        # Groq: только поле API key
+        # Groq: API key + model
         self.groq_api_key_edit.setVisible(is_groq)
+        self.groq_model_edit.setVisible(is_groq)
+        self.groq_label.setVisible(is_groq)
+        self.groq_model_label.setVisible(is_groq)
 
-        # OpenAI: API key + Base URL
+        # OpenAI: API key + Base URL + model
         self.openai_api_key_edit.setVisible(is_openai)
         self.openai_base_url_edit.setVisible(is_openai)
+        self.openai_key_label.setVisible(is_openai)
+        self.openai_url_label.setVisible(is_openai)
+        self.openai_model_edit.setVisible(is_openai)
+        self.openai_model_label.setVisible(is_openai)
 
     def _on_accept(self) -> None:
         self._result_settings = self._build_new_settings()

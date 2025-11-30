@@ -49,8 +49,8 @@ ui:
   always_on_top: true
   opacity: 0.9
   window_size:
-  - 400
-  - 300
+  - 600
+  - 500
   auto_hide_after_paste: false
   hide_delay: 2000
 logging:

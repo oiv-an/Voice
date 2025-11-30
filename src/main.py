@@ -74,62 +74,6 @@ class App:
         # State
         self._is_recording: bool = False
 
-        # Worker thread for heavy audio processing (GigaAM / Groq / LLM)
-        from PyQt6.QtCore import QObject, QThread, pyqtSignal
-
-        class _ProcessingWorker(QObject):
-            finished = pyqtSignal()
-            error = pyqtSignal(str)
-            result_ready = pyqtSignal(str, str)  # raw_text, processed_text
-
-            def __init__(self, app_ref: "App", audio_data) -> None:
-                super().__init__()
-                self._app_ref = app_ref
-                self._audio_data = audio_data
-
-            def run(self) -> None:
-                """
-                Выполняется в отдельном потоке:
-                - распознавание (Groq/GigaAM)
-                - regex + LLM постобработка
-                Никаких Qt-объектов/виджетов здесь не трогаем.
-                """
-                from loguru import logger
-                from recognition.postprocessor import TextPostprocessor as TP
-
-                try:
-                    raw_text = self._app_ref.recognizer.transcribe(self._audio_data)
-                    regex_text = TP._simple_cleanup(raw_text or "")
-
-                    processed_text = regex_text
-                    try:
-                        processed_text = self._app_ref.postprocessor.process(raw_text or "")
-                    except RuntimeError as exc:
-                        logger.error("LLM postprocess error: {}", exc)
-                        # Передаём текст ошибки наверх, чтобы UI показал его
-                        self.error.emit(str(exc))
-                    except Exception as exc:  # noqa: BLE001
-                        logger.exception("Unexpected LLM postprocess error: {}", exc)
-                        self.error.emit("Ошибка LLM-постпроцессинга. См. логи.")
-
-                    self.result_ready.emit(raw_text or "", processed_text or "")
-                except RuntimeError as exc:
-                    # Осмысленные ошибки от распознавания (например, Groq/GigaAM)
-                    from loguru import logger as _logger
-
-                    _logger.error("Processing error: {}", exc)
-                    self.error.emit(str(exc))
-                except Exception as exc:  # noqa: BLE001
-                    from loguru import logger as _logger
-
-                    _logger.exception("Unexpected error during processing: {}", exc)
-                    self.error.emit("Неизвестная ошибка распознавания. См. логи.")
-                finally:
-                    self.finished.emit()
-
-        self._ProcessingWorker = _ProcessingWorker  # type: ignore[attr-defined]
-        self._processing_thread: Optional[QThread] = None
-
         # Hotkeys
         self.hotkeys = HotKeyManager(
             record_hotkey=self.settings.hotkeys.record,
@@ -222,9 +166,8 @@ class App:
 
         def on_finished(audio_data):
             # Этот колбэк вызывается из потока рекордера.
-            # Теперь только запускаем воркер в отдельном QThread,
-            # а UI обновляем через сигналы.
-            self._start_processing_worker(audio_data)
+            # Возвращаемся к синхронной обработке, как в рабочем варианте.
+            self._process_audio(audio_data)
 
         self.audio_recorder.start(on_finished=on_finished)
 
@@ -243,38 +186,84 @@ class App:
 
     # ----------------------------------------------------------- Processing
 
-    def _start_processing_worker(self, audio_data) -> None:
+    def _process_audio(self, audio_data) -> None:
         """
-        Запуск тяжёлой обработки аудио (GigaAM/Groq + LLM) в отдельном QThread.
-
-        ВАЖНО: здесь мы только создаём поток и воркер, а все обновления UI
-        делаем в слотах, которые вызываются уже в главном Qt-потоке.
+        Синхронная обработка аудио с каскадом backend'ов:
+        1) основной backend из настроек (groq / openai / local),
+        2) при ошибке — fallback на остальные по приоритету.
         """
-        from PyQt6.QtCore import QThread
         from loguru import logger
         from pathlib import Path
         from datetime import datetime
-
-        # Если по какой-то причине предыдущий поток ещё жив — аккуратно его гасим.
-        if self._processing_thread is not None:
-            try:
-                self._processing_thread.quit()
-                self._processing_thread.wait(100)
-            except Exception:
-                logger.debug("Previous processing thread cleanup failed", exc_info=True)
+        from recognition.postprocessor import TextPostprocessor as TP  # для _simple_cleanup
+        from recognition import create_recognizer  # каскадное создание по backend'у
 
         self.window.set_state("processing")
 
-        thread = QThread(self.qt_app)
-        worker = self._ProcessingWorker(self, audio_data)
-        worker.moveToThread(thread)
+        # Собираем приоритетный список backend'ов:
+        # сначала выбранный пользователем, затем остальные.
+        primary = (self.settings.recognition.backend or "groq").lower()
+        all_backends = ["groq", "openai", "local"]
+        cascade = [b for b in [primary] + all_backends if b in all_backends]
+        # Убираем дубликаты, сохраняя порядок
+        seen = set()
+        ordered_backends = []
+        for b in cascade:
+            if b not in seen:
+                seen.add(b)
+                ordered_backends.append(b)
 
-        def on_result(raw_text: str, processed_text: str) -> None:
-            """
-            Этот слот вызывается в главном потоке Qt.
-            Здесь можно безопасно трогать UI, буфер обмена и т.п.
-            """
-            # 1) показать оба варианта в окне
+        last_error: str | None = None
+        raw_text: str | None = None
+
+        for backend in ordered_backends:
+            try:
+                logger.info("Trying recognition backend: {}", backend)
+                # Временно подменяем backend в настройках для фабрики
+                original_backend = self.settings.recognition.backend
+                self.settings.recognition.backend = backend
+                recognizer = create_recognizer(self.settings.recognition)
+                # ВАЖНО: возвращаем исходный backend в настройках
+                self.settings.recognition.backend = original_backend
+
+                raw_text = recognizer.transcribe(audio_data)
+                logger.info("Recognition succeeded with backend: {}", backend)
+                break
+            except RuntimeError as exc:
+                # Осмысленная ошибка — логируем и пробуем следующий backend
+                logger.error("Recognition error on backend {}: {}", backend, exc)
+                last_error = str(exc)
+                continue
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Unexpected recognition error on backend {}: {}", backend, exc)
+                last_error = f"Неизвестная ошибка backend '{backend}'. См. логи."
+                continue
+
+        if raw_text is None:
+            # Все backend'ы упали — показываем последнюю ошибку
+            msg = last_error or "Не удалось распознать аудио ни одним backend'ом."
+            self.window.set_state("error")
+            self.window.show_message(msg)
+            return
+
+        from loguru import logger as _logger
+
+        try:
+            # 2) regex-очистка (базовый препроцессинг всегда)
+            regex_text = TP._simple_cleanup(raw_text or "")
+
+            # 3) LLM-постпроцессинг (если включён в конфиге)
+            processed_text = regex_text
+            try:
+                processed_text = self.postprocessor.process(raw_text or "")
+            except RuntimeError as exc:
+                _logger.error("LLM postprocess error: {}", exc)
+                self.window.show_message(str(exc))
+            except Exception as exc:  # noqa: BLE001
+                _logger.exception("Unexpected LLM postprocess error: {}", exc)
+                self.window.show_message("Ошибка LLM-постпроцессинга. См. логи.")
+
+            # 4) показать оба варианта в окне
             try:
                 if hasattr(self.window, "set_raw_text"):
                     self.window.set_raw_text(raw_text or "")
@@ -284,15 +273,15 @@ class App:
                 if hasattr(self.window, "set_processed_text"):
                     self.window.set_processed_text(processed_text or "")
             except Exception:
-                logger.debug("window text update failed", exc_info=True)
+                _logger.debug("window text update failed", exc_info=True)
 
-            # 2) положить ОБРАБОТАННЫЙ текст в буфер обмена
+            # 5) положить ОБРАБОТАННЫЙ текст в буфер обмена
             self.clipboard.copy(processed_text or "")
 
-            # 3) авто-вставка текста через Ctrl+V (с ретраями внутри ClipboardManager)
+            # 6) авто-вставка текста через Ctrl+V (с ретраями внутри ClipboardManager)
             self.clipboard.paste()
 
-            # 4) сохранить распознавание в отдельный текстовый лог с ротацией по ~3 МБ
+            # 7) сохранить распознавание в отдельный текстовый лог с ротацией по ~3 МБ
             try:
                 base_dir = Path(__file__).resolve().parents[2]
                 log_dir = base_dir / "logs"
@@ -313,38 +302,13 @@ class App:
                         "----------------------------------------\\n"
                     )
             except Exception as exc:  # noqa: BLE001
-                logger.exception("Failed to append transcript log: {}", exc)
+                _logger.exception("Failed to append transcript log: {}", exc)
 
             self.window.set_state("ready")
-
-        def on_error(message: str) -> None:
-            """
-            Слот для ошибок распознавания/LLM.
-            """
-            logger = __import__("loguru").logger  # избежать замыкания logger сверху
-            logger.error("Processing error (worker): {}", message)
+        except Exception as exc:  # noqa: BLE001
+            _logger.exception("Unexpected error during post-processing: {}", exc)
             self.window.set_state("error")
-            self.window.show_message(message)
-
-        def on_finished() -> None:
-            """
-            Слот завершения работы воркера: чистим поток.
-            """
-            thread.quit()
-            thread.wait()
-            self._processing_thread = None
-            # Сбрасываем флаг записи, если ещё не сброшен
-            self._is_recording = False
-
-        # wiring сигналов
-        thread.started.connect(worker.run)          # type: ignore[arg-type]
-        worker.result_ready.connect(on_result)      # type: ignore[arg-type]
-        worker.error.connect(on_error)              # type: ignore[arg-type]
-        worker.finished.connect(on_finished)        # type: ignore[arg-type]
-        worker.finished.connect(worker.deleteLater) # type: ignore[arg-type]
-
-        self._processing_thread = thread
-        thread.start()
+            self.window.show_message("Неизвестная ошибка постобработки. См. логи.")
 
     # -------------------------------------------------------------- Debug
 

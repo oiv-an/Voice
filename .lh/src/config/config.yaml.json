@@ -3,7 +3,7 @@
     "activeCommit": 0,
     "commits": [
         {
-            "activePatchIndex": 12,
+            "activePatchIndex": 13,
             "patches": [
                 {
                     "date": 1764289509855,
@@ -56,6 +56,10 @@
                 {
                     "date": 1764394184197,
                     "content": "Index: \n===================================================================\n--- \n+++ \n@@ -25,15 +25,15 @@\n     language: ru\r\n     beam_size: 5\r\n     temperature: 0.0\r\n   openai:\r\n-    api_key: ''\r\n+    api_key: \"\"        # ЗАПОЛНЯЕТСЯ ТОЛЬКО ЛОКАЛЬНО, НЕ КОММИТИТЬ РЕАЛЬНЫЙ КЛЮЧ\r\n     model: whisper-1\r\n     model_process: gpt-5.1\r\n     language: ru\r\n     base_url: https://api.openai.com/v1\r\n   groq:\r\n-    api_key: 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\r\n+    api_key: \"\"        # ЗАПОЛНЯЕТСЯ ТОЛЬКО ЛОКАЛЬНО, НЕ КОММИТИТЬ РЕАЛЬНЫЙ КЛЮЧ\r\n     model: whisper-large-v3\r\n     model_process: llama-3.3-70b-versatile\r\n     language: ru\r\n postprocess:\r\n"
+                },
+                {
+                    "date": 1764466888441,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -48,10 +48,10 @@\n ui:\r\n   always_on_top: true\r\n   opacity: 0.9\r\n   window_size:\r\n-  - 400\r\n-  - 300\r\n+  - 600\r\n+  - 500\r\n   auto_hide_after_paste: false\r\n   hide_delay: 2000\r\n logging:\r\n   level: INFO\r\n"
                 }
             ],
             "date": 1764289509855,
