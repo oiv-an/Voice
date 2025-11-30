@@ -107,6 +107,8 @@ class TextPostprocessor:
 
     def _llm_groq(self, text: str) -> str:
         """
+        Вызов Groq LLM (chat.completions) для постобработки текста.
+
         Для препроцессинга используем тот же ключ, что и для Whisper через Groq,
         чтобы пользователь вводил его один раз в одном месте.
 
@@ -153,11 +155,24 @@ class TextPostprocessor:
         try:
             resp = httpx.post(url, headers=headers, json=payload, timeout=30.0)
         except httpx.TimeoutException as exc:
-            logger.exception("Groq LLM timeout: {}", exc)
-            raise RuntimeError("Groq LLM: превышено время ожидания ответа.") from exc
+            # Явно фиксируем, что это ошибка LLM Groq, а не распознавания.
+            logger.error(
+                "LLM (Groq) timeout, using regex-only postprocess. model={}, error={}",
+                model,
+                exc,
+            )
+            raise RuntimeError(
+                f"Groq LLM timeout (model={model}): {exc}"
+            ) from exc
         except httpx.RequestError as exc:
-            logger.exception("Groq LLM network error: {}", exc)
-            raise RuntimeError("Groq LLM: сетевая ошибка при обращении к API.") from exc
+            logger.error(
+                "LLM (Groq) network error, using regex-only postprocess. model={}, error={}",
+                model,
+                exc,
+            )
+            raise RuntimeError(
+                f"Groq LLM network error (model={model}): {exc}"
+            ) from exc
 
         if resp.status_code == 401:
             raise RuntimeError("Groq LLM: неверный или отсутствующий API‑ключ (401).")
@@ -192,6 +207,13 @@ class TextPostprocessor:
         return content.strip()
 
     def _llm_openai(self, text: str) -> str:
+        """
+        Вызов OpenAI LLM для постобработки.
+
+        ВАЖНО:
+        - ключ всегда берём из recognition.openai.api_key, который SettingsDialog пишет в config.yaml;
+        - если ключ пустой — сразу даём понятную ошибку, без сетевых запросов.
+        """
         api_key = (getattr(self.config.openai, "api_key", "") or "").strip()
         # Модель для постобработки берём из recognition.openai.model_process,
         # с fallback на postprocess.openai.model.
@@ -200,10 +222,15 @@ class TextPostprocessor:
             self.config.openai.model or
             "gpt-5.1"
         ).strip()
+        # URL для LLM берём из того же поля, что и для ASR: recognition.openai.base_url
+        # (SettingsDialog пишет его в config.yaml). Если пусто — дефолтный OpenAI endpoint.
         base_url = (self.config.openai.base_url or "https://api.openai.com/v1").strip()
 
         if not api_key:
-            raise RuntimeError("OpenAI LLM: API‑ключ не задан.")
+            raise RuntimeError(
+                "OpenAI LLM: отсутствует API‑ключ. "
+                "Заполните поле 'OpenAI API key' в настройках и сохраните."
+            )
 
         # Совместимый с OpenAI / proxy формат /chat/completions
         url = base_url.rstrip("/") + "/chat/completions"

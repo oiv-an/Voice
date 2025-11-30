@@ -52,6 +52,7 @@ class App:
                 setattr(post_cfg.groq, "model_process", rec_cfg.groq.model_process)
 
         if (post_cfg.llm_backend or "").lower() == "openai":
+            # ключ для LLM всегда берём из поля OpenAI API key (recognition.openai.api_key)
             setattr(post_cfg.openai, "api_key", rec_cfg.openai.api_key)
             if not getattr(post_cfg.openai, "model_process", ""):
                 setattr(post_cfg.openai, "model_process", rec_cfg.openai.model_process)

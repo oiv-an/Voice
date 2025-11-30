@@ -132,13 +132,22 @@ class AppSettings:
     @classmethod
     def load_default(cls) -> "AppSettings":
         """
-        Load settings from config/config.yaml if exists, otherwise use defaults.
+        Load settings from src/config/config.yaml and optionally
+        src/config/config.local.yaml (local overrides).
+
+        The merge strategy is:
+        - Load base config.yaml (if present).
+        - Load config.local.yaml (if present).
+        - Deep-merge: values from config.local.yaml override config.yaml.
+        - Apply dataclass defaults for any missing fields.
         """
         base_dir = Path(__file__).resolve().parents[2]
-        config_path = base_dir / "src" / "config" / "config.yaml"
+        config_dir = base_dir / "src" / "config"
+        config_path = config_dir / "config.yaml"
+        local_config_path = config_dir / "config.local.yaml"
 
+        # If there is no base config at all, fall back to pure defaults.
         if not config_path.exists():
-            # Pure defaults
             return cls(
                 app=AppInfoConfig(),
                 hotkeys=HotkeysConfig(),
@@ -149,30 +158,71 @@ class AppSettings:
                 logging=LoggingConfig(),
             )
 
-        with config_path.open("r", encoding="utf-8") as f:
-            raw: Dict[str, Any] = yaml.safe_load(f) or {}
+        def _load_yaml(path: Path) -> Dict[str, Any]:
+            if not path.exists():
+                return {}
+            with path.open("r", encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+
+        def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+            """
+            Recursively merge two dicts.
+
+            - base: original data (e.g. from config.yaml)
+            - override: local overrides (e.g. from config.local.yaml)
+
+            Values from override take precedence. Nested dicts are merged
+            recursively; other types are replaced.
+            """
+            result: Dict[str, Any] = dict(base)
+            for key, value in (override or {}).items():
+                if (
+                    key in result
+                    and isinstance(result[key], dict)
+                    and isinstance(value, dict)
+                ):
+                    result[key] = _deep_merge(result[key], value)
+                else:
+                    result[key] = value
+            return result
+
+        base_raw: Dict[str, Any] = _load_yaml(config_path)
+        local_raw: Dict[str, Any] = _load_yaml(local_config_path)
+
+        # Local config overrides base config.
+        raw: Dict[str, Any] = _deep_merge(base_raw, local_raw)
 
         def get_section(name: str, default: Dict[str, Any]) -> Dict[str, Any]:
-            return raw.get(name, {}) or default
+            section = raw.get(name, {}) or {}
+            # Shallow-merge section over defaults so that missing keys
+            # still get dataclass defaults.
+            merged: Dict[str, Any] = dict(default)
+            merged.update(section)
+            return merged
 
         app_cfg = AppInfoConfig(**get_section("app", AppInfoConfig().__dict__))
         hotkeys_cfg = HotkeysConfig(**get_section("hotkeys", HotkeysConfig().__dict__))
         audio_cfg = AudioConfig(**get_section("audio", AudioConfig().__dict__))
 
-        rec_raw = get_section("recognition", {})
-        local_raw = rec_raw.get("local", {}) or {}
-        openai_raw = rec_raw.get("openai", {}) or {}
-        groq_raw = rec_raw.get("groq", {}) or {}
+        rec_raw = raw.get("recognition", {}) or {}
+        local_raw_rec = rec_raw.get("local", {}) or {}
+        openai_raw_rec = rec_raw.get("openai", {}) or {}
+        groq_raw_rec = rec_raw.get("groq", {}) or {}
+
         recognition_cfg = RecognitionConfig(
             backend=rec_raw.get("backend", "local"),
-            local=LocalRecognitionConfig(**{**LocalRecognitionConfig().__dict__, **local_raw}),
-            openai=OpenAIRecognitionConfig(
-                **{**OpenAIRecognitionConfig().__dict__, **openai_raw}
+            local=LocalRecognitionConfig(
+                **{**LocalRecognitionConfig().__dict__, **local_raw_rec}
             ),
-            groq=GroqRecognitionConfig(**{**GroqRecognitionConfig().__dict__, **groq_raw}),
+            openai=OpenAIRecognitionConfig(
+                **{**OpenAIRecognitionConfig().__dict__, **openai_raw_rec}
+            ),
+            groq=GroqRecognitionConfig(
+                **{**GroqRecognitionConfig().__dict__, **groq_raw_rec}
+            ),
         )
 
-        post_raw = get_section("postprocess", {})
+        post_raw = raw.get("postprocess", {}) or {}
         groq_post_raw = post_raw.get("groq", {}) or {}
         openai_post_raw = post_raw.get("openai", {}) or {}
 

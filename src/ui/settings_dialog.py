@@ -105,7 +105,8 @@ class SettingsDialog(QDialog):
         self.backend_combo = QComboBox()
         self.backend_combo.addItem("Groq", userData="groq")
         self.backend_combo.addItem("OpenAI", userData="openai")
-        self.backend_combo.currentIndexChanged.connect(self._on_backend_changed)
+        self.backend_combo.addItem("GigaAM-v3 (local)", userData="local")
+        # выбор сервиса распознавания ничего не скрывает, сигнал больше не нужен
         backend_form.addRow("Сервис распознавания:", self.backend_combo)
 
         self.groq_api_key_edit = QLineEdit()
@@ -140,6 +141,12 @@ class SettingsDialog(QDialog):
         self.post_enabled_checkbox = QCheckBox("Включить постпроцессинг")
         post_form.addRow(self.post_enabled_checkbox)
 
+        # выбор backend для постпроцессинга (независимо от backend'а распознавания)
+        self.post_backend_combo = QComboBox()
+        self.post_backend_combo.addItem("Groq", userData="groq")
+        self.post_backend_combo.addItem("OpenAI", userData="openai")
+        post_form.addRow("Сервис постпроцессинга:", self.post_backend_combo)
+
         self.groq_llm_model_edit = QLineEdit()
         post_form.addRow("Groq postprocess model:", self.groq_llm_model_edit)
 
@@ -167,7 +174,7 @@ class SettingsDialog(QDialog):
 
         # backend
         backend = (rec.backend or "groq").lower()
-        index = self.backend_combo.findData(backend) if backend in ("groq", "openai") else -1
+        index = self.backend_combo.findData(backend)
         if index == -1:
             index = self.backend_combo.findData("groq")
         if index != -1:
@@ -184,10 +191,25 @@ class SettingsDialog(QDialog):
 
         # LLM‑модели (постпроцессинг)
         self.post_enabled_checkbox.setChecked(settings.postprocess.enabled)
+
+        # backend постпроцессинга (llm_backend)
+        llm_backend = (settings.postprocess.llm_backend or "groq").lower()
+        idx_llm = (
+            self.post_backend_combo.findData(llm_backend)
+            if llm_backend in ("groq", "openai")
+            else -1
+        )
+        if idx_llm == -1:
+            idx_llm = self.post_backend_combo.findData("groq")
+        if idx_llm != -1:
+            self.post_backend_combo.setCurrentIndex(idx_llm)
+
         self.groq_llm_model_edit.setText(settings.postprocess.groq.model)
         self.openai_llm_model_edit.setText(settings.postprocess.openai.model)
 
-        self._on_backend_changed()
+        # раньше здесь вызывался _on_backend_changed(), который скрывал поля ключей.
+        # теперь все поля всегда видимы, поэтому вызов не нужен.
+        # self._on_backend_changed()
 
     def _build_new_settings(self) -> AppSettings:
         backend_data = self.backend_combo.currentData()
@@ -220,6 +242,11 @@ class SettingsDialog(QDialog):
         new_postprocess = replace(
             old.postprocess,
             enabled=self.post_enabled_checkbox.isChecked(),
+            llm_backend=str(
+                self.post_backend_combo.currentData()
+                or old.postprocess.llm_backend
+                or "groq"
+            ),
             groq=replace(
                 old.postprocess.groq,
                 model=groq_llm_model or old.postprocess.groq.model,

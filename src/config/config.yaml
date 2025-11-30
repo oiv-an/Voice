@@ -3,11 +3,13 @@ app:
   version: 1.0.0
   language: ru
   debug: false
+
 hotkeys:
   record: ctrl+win
   cancel: esc
   toggle_window: ctrl+alt+s
   toggle_debug: ctrl+alt+d
+
 audio:
   device: default
   sample_rate: 16000
@@ -16,8 +18,11 @@ audio:
   max_duration: 60
   vad_threshold: 0.5
   vad_min_duration: 0.1
+
 recognition:
-  backend: openai
+  # ТОЛЬКО выбор backend'а и общие параметры.
+  # Реальные API‑ключи НЕ храним в этом файле, чтобы не утекали в git.
+  backend: groq  # local, openai, groq
   local:
     model: large-v3
     device: cuda
@@ -26,33 +31,36 @@ recognition:
     beam_size: 5
     temperature: 0.0
   openai:
-    api_key: sk-voidai-eSAQo4ZnRaesikIDbfz1KphYEJ465IxuLvR87k4zLZqYJz3nrFvLmcdjVJS0WMFvwY4jxHj3iszt3Is5fMXiGnc2XB9uTHCWNqON
-    model: gpt-4o-transcribe
-    model_process: gpt-5.1
+    api_key: sk-...        # ЗАПОЛНИТЬ ЛОКАЛЬНО в config.local.yaml или через UI
+    model: whisper-1
+    model_process: gpt-4
     language: ru
-    base_url: https://api.voidai.app/v1
+    base_url: https://api.openai.com/v1
   groq:
-    api_key: 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
+    api_key: gsk-...       # ЗАПОЛНИТЬ ЛОКАЛЬНО в config.local.yaml или через UI
     model: whisper-large-v3
-    model_process: llama-3.3-70b-versatile
+    model_process: mixtral-8x7b-32768
     language: ru
+
 postprocess:
   enabled: true
   mode: llm
   llm_backend: groq
   groq:
-    model: llama-3.3-70b-versatile
+    model: mixtral-8x7b-32768
   openai:
-    model: gpt-5.1
+    model: gpt-4
     base_url: https://api.openai.com/v1
+
 ui:
   always_on_top: true
   opacity: 0.9
   window_size:
-  - 600
-  - 500
+    - 600
+    - 500
   auto_hide_after_paste: false
   hide_delay: 2000
+
 logging:
   level: INFO
   file: app.log
