@@ -5,13 +5,28 @@ PyQt6-sip==13.6.0
 # Audio
 pyaudio==0.2.13
 sounddevice==0.4.6
-numpy==1.24.3
+# NumPy 1.26.x — стабильная версия для Python 3.12 и PyTorch 2.4.x
+numpy==1.26.4
+# Для записи временных WAV-файлов в GigaAM
+soundfile==0.13.0
 
-# Recognition
-openai-whisper==20240314
+# Распознавание / нейросети
+# ------------------------------------------------------------------
+# ВАЖНО:
+#  - Ниже указаны прямые ссылки на CUDA-версии PyTorch/torchaudio
+#    под Windows x64, Python 3.12 и CUDA 12.1.
+#  - Это гарантирует установку GPU-сборки, чтобы GigaAM сразу работал
+#    на видеокарте.
+#  - Если у тебя другая версия Python/OS/CUDA, см. README и
+#    подбери колёса с https://download.pytorch.org/whl вручную.
+torch @ https://download.pytorch.org/whl/cu121/torch-2.4.0%2Bcu121-cp312-cp312-win_amd64.whl
+torchaudio @ https://download.pytorch.org/whl/cu121/torchaudio-2.4.0%2Bcu121-cp312-cp312-win_amd64.whl
+
+# faster-whisper остаётся для альтернативного локального распознавания
 faster-whisper==1.0.1
-torch==2.2.0
-torchaudio==2.2.0
+
+# HuggingFace Transformers — для GigaAM (через AutoModel)
+transformers==4.47.1
 
 # API
 requests==2.31.0

@@ -12,7 +12,8 @@ VoiceCapture — это десктоп‑утилита для Windows, кото
 - единый, предсказуемый конфиг `config.yaml`;
 - корректная работа всех backend’ов (Groq/OpenAI/local) для ASR и LLM;
 - консистентная работа окна настроек;
-- чистый, легко отлаживаемый пайплайн распознавания и постпроцессинга.
+- чистый, легко отлаживаемый пайплайн распознавания и постпроцессинга;
+- простая и надёжная локальная интеграция GigaAM‑v3 без longform и без Hugging Face токена.
 
 ---
 
@@ -87,7 +88,7 @@ postprocess:
 ui:
   always_on_top: true
   opacity: 0.9
-  window_size: [600, 500]
+  window_size: [600, 400]
   auto_hide_after_paste: true
   hide_delay: 2000
 
@@ -110,6 +111,11 @@ logging:
 Ключевые поля:
 
 - `recognition.backend` — текущий backend распознавания (`groq` / `openai` / `local`).
+- `recognition.local`:
+  - `model` — идентификатор локальной модели GigaAM‑v3 (используется внутри кода, по умолчанию `large-v3`).
+  - `device` — `"cuda"` или `"cpu"`; при `cuda` и отсутствии GPU автоматически падает на CPU.
+  - `compute_type`, `language`, `beam_size`, `temperature` — зарезервированы под локальные модели, сейчас используются минимально.
+  - **Ограничение:** локальный GigaAM‑backend обрабатывает только аудио до ~25 секунд. Всё, что длиннее, автоматически отдаётся в облачный backend (Groq/OpenAI) через каскад `_process_audio`.
 - `recognition.openai`:
   - `api_key` — ключ к OpenAI‑совместимому API (или прокси).
   - `model` — модель ASR (например, `gpt-4o-transcribe`).
@@ -255,6 +261,16 @@ logging:
 3. При успехе — выходит из цикла, при ошибке — логирует и пробует следующий backend.
 4. Если все упали — показывает последнюю ошибку.
 
+Особенности локального backend’а GigaAM‑v3:
+
+- Реализован в [`GigaAMRecognizer`](src/recognition/gigaam_local.py#L12).
+- Использует только `model.transcribe(path)` без longform и без Hugging Face токена.
+- Перед вызовом `transcribe` оценивает длительность аудио:
+  - если длительность **> 25 секунд**, сразу выбрасывает контролируемый `RuntimeError("GigaAM-v3: аудио длиннее 25 секунд, используем облачный backend.")`;
+  - это приводит к тому, что `_process_audio` переходит к следующему backend’у (обычно Groq).
+- Если сама модель GigaAM возвращает ошибку `"Too long wav file, use 'transcribe_longform' method."`, она также заворачивается в `RuntimeError`, и каскад переходит к Groq/OpenAI.
+- Таким образом, локальный GigaAM используется только для коротких запросов (до ~25 секунд), а длинные автоматически обрабатываются облаком.
+
 ### OpenAI ASR
 
 Реализован в [`OpenAIWhisperRecognizer`](src/recognition/openai_api.py#L19):
@@ -337,7 +353,7 @@ logging:
 
 Используется [`loguru`](src/utils/logger.py#L1).
 
-Ключевые сообщения:
+### Основные сообщения в консоль / app.log
 
 - При распознавании:
   - `Trying recognition backend: {backend}`
@@ -352,6 +368,39 @@ logging:
     - `OpenAI LLM postprocess using api_key (first 8 chars): {prefix}***`
 - При ошибках LLM:
   - `LLM postprocess failed, fallback to regex-only: {exc}`.
+
+### Отдельный лог распознаваний (transcripts.log)
+
+Каждое успешное распознавание дополнительно сохраняется в отдельный текстовый лог‑файл:
+
+- Путь: `<base_dir>/logs/transcripts.log`, где:
+  - `base_dir` — корень проекта при запуске из исходников;
+  - либо папка рядом с `.exe` в собранной версии.
+- Реализация — в методе [`App._process_audio()`](src/main.py:253).
+
+Для каждого распознавания в `transcripts.log` пишется блок вида:
+
+```text
+[2025-12-02 11:23:45] backend=groq duration=3.524s
+RAW: привет как дела
+PROCESSED: Привет, как дела?
+----------------------------------------
+```
+
+Где:
+
+- `timestamp` — время завершения распознавания;
+- `backend` — фактический backend, который вернул результат (`groq` / `openai` / `local`);
+- `duration` — длительность аудио в секундах (по числу сэмплов и sample_rate);
+- `RAW` — исходный текст от ASR;
+- `PROCESSED` — текст после постобработки (regex + LLM, если включён).
+
+#### Ротация transcripts.log
+
+- Если размер `transcripts.log` достигает ~3 МБ:
+  - текущий файл переименовывается в `transcripts_YYYYMMDD_HHMMSS.log`;
+  - создаётся новый `transcripts.log`.
+- Это позволяет хранить историю распознаваний без бесконечного роста файла.
 
 ---
 
@@ -373,6 +422,7 @@ python src/main.py
 
 - создастся `config.yaml` в корне;
 - backend по умолчанию — `local` (GigaAM);
+- локальный GigaAM будет использоваться только для коротких записей (до ~25 секунд);
 - для Groq/OpenAI нужно будет вручную ввести ключи и (для OpenAI) `base_url`.
 
 ### Настройка backend’ов
@@ -434,6 +484,12 @@ VoiceCapture is a Windows desktop utility that:
 - sends audio to a selected recognition backend (Groq / OpenAI / local GigaAM);
 - optionally runs the text through an LLM post‑processor (Groq or OpenAI);
 - copies the final text to the clipboard and auto‑pastes it (Ctrl+V).
+
+In the final version:
+
+- the local GigaAM‑v3 backend is used only for short audio (up to ~25 seconds);
+- longer recordings are automatically handled by cloud backends (Groq/OpenAI);
+- there is no Hugging Face token or longform integration in the app code.
 
 Current version goals:
 
@@ -689,6 +745,7 @@ On first run:
 
 - `config.yaml` is created in the project root.
 - Default backend is `local` (GigaAM).
+- Local GigaAM is used only for short recordings (up to ~25 seconds); longer ones will fall back to Groq/OpenAI.
 - You must manually set API keys and (for OpenAI) `base_url`.
 
 ### Configure backends

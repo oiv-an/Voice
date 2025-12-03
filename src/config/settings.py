@@ -213,6 +213,10 @@ class AppSettings:
         openai_raw_rec = rec_raw.get("openai", {}) or {}
         groq_raw_rec = rec_raw.get("groq", {}) or {}
 
+        # Удаляем устаревшее поле hf_token из локального блока, если оно есть в старом config.yaml
+        if "hf_token" in local_raw_rec:
+            local_raw_rec.pop("hf_token", None)
+
         recognition_cfg = RecognitionConfig(
             backend=rec_raw.get("backend", "local"),
             local=LocalRecognitionConfig(

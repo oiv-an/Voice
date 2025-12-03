@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 )
 
 from config.settings import UIConfig
+from ui.animated_icons import RecordingIcon, ProcessingIcon, ReadyIcon
 
 
 class ClickableLabel(QLabel):
@@ -80,78 +81,51 @@ class FloatingWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
 
     def _init_ui(self) -> None:
-        # верхняя панель (один набор кнопок для всех режимов)
-        self.menu_button = QPushButton("⚙️")
-        self.menu_button.setFixedSize(24, 24)
-        self.menu_button.clicked.connect(self._on_menu_clicked)
+        # --- Создаём все виджеты один раз ---
+        self._create_controls()
 
-        self.compact_button = QPushButton("▢")
-        self.compact_button.setFixedSize(24, 24)
-        self.compact_button.clicked.connect(self._on_compact_clicked)
-
-        self.close_button = QPushButton("✖️")
-        self.close_button.setFixedSize(24, 24)
-        self.close_button.clicked.connect(self._on_close_clicked)
+        # --- Страница для обычного режима ---
+        self.normal_page = QWidget()
+        normal_layout = QVBoxLayout(self.normal_page)
+        normal_layout.setContentsMargins(6, 6, 6, 6)
+        normal_layout.setSpacing(6)
 
         top_layout = QHBoxLayout()
         top_layout.setContentsMargins(4, 4, 4, 4)
         top_layout.setSpacing(4)
         top_layout.addWidget(self.menu_button)
         top_layout.addStretch()
-        # В обычном режиме: ▢ и ✖️ справа
-        top_layout.addWidget(self.compact_button)
+        top_layout.addWidget(self.compact_button_normal)
         top_layout.addWidget(self.close_button)
 
-        # ---------- основное содержимое (режим "main") ----------
-        # верхняя иконка нам не нужна в обычном режиме — используем только для компактного
-        self.icon_label = QLabel()
-        # В компактном режиме иконка должна быть строго по центру по вертикали и горизонтали.
-        self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.icon_label.setText("🎙️")
-        # Без лишних отступов, только размер шрифта.
-        self.icon_label.setStyleSheet("font-size: 16pt;")
-        self.icon_label.setVisible(False)
+        status_container = QWidget()
+        status_layout = QHBoxLayout(status_container)
+        status_layout.setContentsMargins(0, 0, 0, 0)
+        status_layout.setSpacing(10)
+        status_layout.addWidget(self.icons_container)
+        status_layout.addWidget(self.status_text_label)
+        status_layout.addStretch()
+        status_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # текст распознанного результата (сырой текст от Whisper)
-        self.raw_label = ClickableLabel("")
-        self.raw_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.raw_label.setWordWrap(True)
-        self.raw_label.setObjectName("textBlock")
-        self.raw_label.clicked.connect(lambda: self._copy_text(self.raw_label.text()))
+        normal_layout.addLayout(top_layout)
+        normal_layout.addWidget(status_container, alignment=Qt.AlignmentFlag.AlignCenter)
+        normal_layout.addWidget(self.raw_label)
+        normal_layout.addWidget(self.processed_label)
 
-        # текст после постпроцессинга (LLM / regex)
-        self.processed_label = ClickableLabel("")
-        self.processed_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.processed_label.setWordWrap(True)
-        self.processed_label.setObjectName("textBlock")
-        self.processed_label.clicked.connect(
-            lambda: self._copy_text(self.processed_label.text())
-        )
+        # --- Страница для компактного режима ---
+        self.compact_page = QWidget()
+        compact_layout = QHBoxLayout(self.compact_page)
+        compact_layout.setContentsMargins(4, 4, 4, 4)
+        compact_layout.setSpacing(10)
+        compact_layout.addWidget(self.icons_container_compact)
+        compact_layout.addWidget(self.status_text_label_compact)
+        compact_layout.addStretch()
+        compact_layout.addWidget(self.compact_button_compact)
 
-        # для обратной совместимости (старый код использует result_label)
-        self.result_label = self.processed_label
-
-        # текст статуса
-        self.status_label = QLabel("")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        main_page = QWidget()
-        main_layout = QVBoxLayout(main_page)
-        main_layout.setContentsMargins(6, 6, 6, 6)
-        main_layout.setSpacing(6)
-        main_layout.addLayout(top_layout)
-        # В обычном режиме иконка скрыта, в компактном — она по центру.
-        main_layout.addWidget(self.icon_label, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # Два текста: сверху — сырой, снизу — после постпроцессинга.
-        main_layout.addWidget(self.raw_label)
-        main_layout.addWidget(self.processed_label)
-        main_layout.addWidget(self.status_label)
-
-        # ---------- стек страниц ----------
-        # Встроенную панель настроек убрали: настройки открываются отдельным диалогом.
+        # --- Основной стек и контейнер ---
         self._stack = QStackedLayout()
-        self._stack.addWidget(main_page)  # index 0: main
+        self._stack.addWidget(self.normal_page)
+        self._stack.addWidget(self.compact_page)
 
         container = QWidget()
         container.setLayout(self._stack)
@@ -162,6 +136,92 @@ class FloatingWindow(QWidget):
         root_layout.addWidget(container)
 
         self._apply_styles()
+
+    def _create_controls(self) -> None:
+        """Создаёт все управляющие элементы, чтобы избежать дублирования."""
+        # --- Кнопки ---
+        self.menu_button = QPushButton("⚙️")
+        self.menu_button.setFixedSize(24, 24)
+        self.menu_button.clicked.connect(self._on_menu_clicked)
+
+        self.close_button = QPushButton("✖️")
+        self.close_button.setFixedSize(24, 24)
+        self.close_button.clicked.connect(self._on_close_clicked)
+
+        # Две кнопки компактного режима для разных страниц
+        self.compact_button_normal = QPushButton("—")
+        self.compact_button_normal.setFixedSize(24, 24)
+        self.compact_button_normal.clicked.connect(self._on_compact_clicked)
+        self.compact_button_normal.setStyleSheet("font-weight: bold; font-size: 14pt;")
+
+        self.compact_button_compact = QPushButton("—")
+        self.compact_button_compact.setFixedSize(24, 24)
+        self.compact_button_compact.clicked.connect(self._on_compact_clicked)
+        self.compact_button_compact.setStyleSheet("font-weight: bold; font-size: 14pt;")
+
+        # --- Иконки состояний ---
+        self.icons_stack = QStackedLayout()
+        self.icon_idle = QLabel("🎙️")
+        self.icon_idle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.icon_idle.setStyleSheet("font-size: 24pt; color: rgba(255, 255, 255, 0.5);")
+        self.icon_recording = RecordingIcon()
+        self.icon_processing = ProcessingIcon()
+        self.icon_ready = ReadyIcon()
+        self.icon_error = QLabel("⚠️")
+        self.icon_error.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.icon_error.setStyleSheet("font-size: 24pt; color: #FF9500;")
+
+        for icon in [self.icon_idle, self.icon_recording, self.icon_processing, self.icon_ready, self.icon_error]:
+            self.icons_stack.addWidget(icon)
+
+        self.icons_container = QWidget()
+        self.icons_container.setLayout(self.icons_stack)
+        self.icons_container.setFixedSize(40, 40)
+
+        # Клонируем стек иконок для компактного режима
+        self.icons_stack_compact = QStackedLayout()
+        for i in range(self.icons_stack.count()):
+            # Мы не можем использовать те же виджеты, поэтому создаём их заново или клонируем.
+            # В данном случае, QLabel и кастомные виджеты можно создать заново.
+            # Это упрощение; в сложном случае потребовалось бы более аккуратное клонирование.
+            widget = self.icons_stack.widget(i)
+            if isinstance(widget, QLabel):
+                new_label = QLabel(widget.text())
+                new_label.setAlignment(widget.alignment())
+                new_label.setStyleSheet(widget.styleSheet())
+                self.icons_stack_compact.addWidget(new_label)
+            elif isinstance(widget, RecordingIcon):
+                self.icons_stack_compact.addWidget(RecordingIcon())
+            elif isinstance(widget, ProcessingIcon):
+                self.icons_stack_compact.addWidget(ProcessingIcon())
+            elif isinstance(widget, ReadyIcon):
+                self.icons_stack_compact.addWidget(ReadyIcon())
+
+        self.icons_container_compact = QWidget()
+        self.icons_container_compact.setLayout(self.icons_stack_compact)
+        self.icons_container_compact.setFixedSize(40, 40)
+
+        # --- Текстовые поля ---
+        self.raw_label = ClickableLabel("")
+        self.raw_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.raw_label.setWordWrap(True)
+        self.raw_label.setObjectName("textBlock")
+        self.raw_label.clicked.connect(lambda: self._copy_text(self.raw_label.text()))
+
+        self.processed_label = ClickableLabel("")
+        self.processed_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.processed_label.setWordWrap(True)
+        self.processed_label.setObjectName("textBlock")
+        self.processed_label.clicked.connect(lambda: self._copy_text(self.processed_label.text()))
+        self.result_label = self.processed_label
+
+        self.status_text_label = QLabel("")
+        self.status_text_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.status_text_label.setStyleSheet("color: rgba(255, 255, 255, 0.9); font-size: 11pt; font-weight: bold;")
+
+        self.status_text_label_compact = QLabel("")
+        self.status_text_label_compact.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.status_text_label_compact.setStyleSheet(self.status_text_label.styleSheet())
 
     def _apply_styles(self) -> None:
         self.setStyleSheet(
@@ -209,32 +269,30 @@ class FloatingWindow(QWidget):
     def set_state(self, state: str) -> None:
         self._state = state
 
-        # обычный режим: только нижний индикатор
-        if state == "idle":
-            self.status_label.setText("")
-        elif state == "recording":
-            self.status_label.setText("🔴")
-            self.result_label.setText("")
-        elif state == "processing":
-            self.status_label.setText("⏳")
-        elif state == "ready":
-            self.status_label.setText("✅")
-            QTimer.singleShot(1000, lambda: self.set_state("idle"))
-        elif state == "error":
-            self.status_label.setText("⚠️")
-        else:
-            self.status_label.setText("")
+        # Обновляем оба стека иконок и текстовые метки
+        state_map = {
+            "idle": (self.icon_idle, ""),
+            "recording": (self.icon_recording, "Запись..."),
+            "processing": (self.icon_processing, "Обработка..."),
+            "ready": (self.icon_ready, "Готово"),
+            "error": (self.icon_error, "Ошибка"),
+        }
+        
+        target_icon, status_text = state_map.get(state, (self.icon_idle, ""))
 
-        # компактный режим: одна иконка
-        if self._compact:
-            if state == "recording":
-                self.icon_label.setText("🔴")
-            elif state == "processing":
-                self.icon_label.setText("⏳")
-            elif state == "error":
-                self.icon_label.setText("⚠️")
-            else:
-                self.icon_label.setText("🎙️")
+        # Находим индекс целевой иконки в основном стеке
+        target_index = self.icons_stack.indexOf(target_icon)
+        if target_index != -1:
+            self.icons_stack.setCurrentIndex(target_index)
+            # Синхронизируем компактный стек
+            if self.icons_stack_compact.count() > target_index:
+                self.icons_stack_compact.setCurrentIndex(target_index)
+
+        self.status_text_label.setText(status_text)
+        self.status_text_label_compact.setText(status_text)
+
+        if state == "ready":
+            QTimer.singleShot(1000, lambda: self.set_state("idle"))
 
         # управляем отображением текстовых блоков
         self._text_blocks_enabled = state not in {"recording"}
@@ -243,64 +301,42 @@ class FloatingWindow(QWidget):
             self.processed_label.setText("")
         self._refresh_text_block_visibility()
 
-        # применяем текущий режим (compact/normal)
-        self._apply_compact_mode()
+        # Если мы в компактном режиме, нужно обновить размер, т.к. текст мог измениться
+        if self._compact:
+            self.adjustSize()
 
     def set_compact(self, compact: bool) -> None:
         """Переключение между большим окном и компактным микрофоном."""
+        if self._compact == compact:
+            return
         self._compact = compact
         self._apply_compact_mode()
+        self.toggle_compact_requested.emit()
 
     def _refresh_text_block_visibility(self) -> None:
-        should_show = self._text_blocks_enabled and not self._compact
+        # Теперь видимость зависит только от состояния, а не от режима compact
+        should_show = self._text_blocks_enabled
         self.raw_label.setVisible(should_show)
         self.processed_label.setVisible(should_show)
 
     def _apply_compact_mode(self) -> None:
-        """
-        Компактный режим.
-
-        Горизонтальная плашка:
-        [   🎙️ / 🔴 / ⏳   ]      [ ▢ ]
-
-        - по центру — иконка микрофона/статуса,
-        - справа — маленькая кнопка разворота.
-        """
         if self._compact:
-            # скрываем текст
-            self.status_label.setVisible(False)
-
-            # в компактном режиме:
-            # - меню и крестик прячем,
-            # - оставляем только кнопку compact (▢) как точку возврата.
-            self.menu_button.setVisible(False)
-            self.close_button.setVisible(False)
-            self.compact_button.setVisible(True)
-
-            # включаем иконку
-            self.icon_label.setVisible(True)
-
-            # Компактное окно: невысокая горизонтальная плашка.
-            # Высота подобрана так, чтобы иконка и ▢ были на одной линии и не обрезались.
-            self.setFixedSize(180, 70)
+            self._stack.setCurrentWidget(self.compact_page)
+            # Задаём жёсткий размер для компактного режима, чтобы он не "прыгал".
+            self.setFixedSize(220, 48)
         else:
-            # обычный режим
-            self.status_label.setVisible(True)
-
-            self.menu_button.setVisible(True)
-            self.close_button.setVisible(True)
-            self.compact_button.setVisible(True)
-
-            # верхняя иконка в обычном режиме не нужна
-            self.icon_label.setVisible(False)
-
+            self._stack.setCurrentWidget(self.normal_page)
+            self._refresh_text_block_visibility()
+            
+            # Восстанавливаем исходный размер с отсрочкой.
+            # Сначала снимаем ограничения, чтобы окно могло свободно расшириться.
+            self.setMinimumSize(0, 0)
+            self.setMaximumSize(16777215, 16777215)
             w, h = self._ui_config.window_size
-            self.setFixedSize(w, h)
-
-        self._refresh_text_block_visibility()
+            QTimer.singleShot(0, lambda: self.setFixedSize(w, h))
 
     def show_message(self, text: str, timeout_ms: int = 2000) -> None:
-        self.status_label.setText(text)
+        self.status_text_label.setText(text)
         if timeout_ms > 0:
             QTimer.singleShot(timeout_ms, lambda: self.set_state(self._state))
 
@@ -308,7 +344,7 @@ class FloatingWindow(QWidget):
         if not text:
             return
         QGuiApplication.clipboard().setText(text)
-        self.status_label.setText("Скопировано в буфер обмена")
+        self.status_text_label.setText("Скопировано в буфер обмена")
         QTimer.singleShot(1200, lambda: self.set_state(self._state))
 
     # ------------------------------------------------------------------ text setters
@@ -335,7 +371,6 @@ class FloatingWindow(QWidget):
     def _on_compact_clicked(self) -> None:
         # Переключить режим окна
         self.set_compact(not self._compact)
-        self.toggle_compact_requested.emit()
 
     def _on_close_clicked(self) -> None:
         # Кнопка закрытия: сигнал наверх (App решает — выйти или скрыть окно)

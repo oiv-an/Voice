@@ -55,6 +55,7 @@ Desktop.ini
 *.env
 
 # Local config with secrets (API keys, tokens, etc.)
+config.yaml
 config.local.yaml
 config.local.yml
 config.local.json
@@ -68,4 +69,5 @@ config.local.json
 
 # Cache / models (if later added)
 .cache/
-models/".lh/"  
+models/
+.lh/

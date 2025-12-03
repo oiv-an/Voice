@@ -21,12 +21,13 @@ def create_recognizer(config: RecognitionConfig) -> IRecognizer:
     Поддерживаем три backend'а:
       - "groq"   — облачный Groq Whisper
       - "openai" — облачный OpenAI Whisper
-      - "local"  — локальный GigaAM-v3-CTC (v2_ctc)
+      - "local"  — локальный GigaAM-v3 e2e_rnnt через HuggingFace
     """
     backend = (config.backend or "groq").lower()
 
     if backend == "local":
         # Локальный GigaAM-v3 e2e_rnnt через HuggingFace
+        # Текущая реализация GigaAMRecognizer не принимает аргументов конструктора.
         return GigaAMRecognizer()
 
     if backend == "groq":

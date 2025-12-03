@@ -1,0 +1,22 @@
+{
+    "sourceFile": "src/recognition/__init__.py",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 1,
+            "patches": [
+                {
+                    "date": 1764628028337,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                },
+                {
+                    "date": 1764647626102,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -25,11 +25,10 @@\n     \"\"\"\r\n     backend = (config.backend or \"groq\").lower()\r\n \r\n     if backend == \"local\":\r\n-        # Локальный GigaAM-v3 e2e_rnnt через HuggingFace\r\n+        # Локальный GigaAM-v3 e2e_rnnt через HuggingFace (без longform/HF-токена)\r\n         return GigaAMRecognizer(\r\n-            hf_token=config.local.hf_token,\r\n             device=config.local.device,\r\n         )\r\n \r\n     if backend == \"groq\":\r\n"
+                }
+            ],
+            "date": 1764628028337,
+            "name": "Commit-0",
+            "content": "from __future__ import annotations\r\n\r\nfrom typing import Protocol\r\n\r\nfrom audio.recorder import AudioData\r\nfrom config.settings import RecognitionConfig\r\nfrom recognition.groq_api import GroqWhisperRecognizer\r\nfrom recognition.gigaam_local import GigaAMRecognizer\r\nfrom recognition.openai_api import OpenAIWhisperRecognizer\r\n\r\n\r\nclass IRecognizer(Protocol):\r\n    def transcribe(self, audio: AudioData) -> str:  # pragma: no cover - protocol\r\n        ...\r\n\r\n\r\ndef create_recognizer(config: RecognitionConfig) -> IRecognizer:\r\n    \"\"\"\r\n    Factory for recognizers.\r\n\r\n    Поддерживаем три backend'а:\r\n      - \"groq\"   — облачный Groq Whisper\r\n      - \"openai\" — облачный OpenAI Whisper\r\n      - \"local\"  — локальный GigaAM-v3 e2e_rnnt через HuggingFace\r\n    \"\"\"\r\n    backend = (config.backend or \"groq\").lower()\r\n\r\n    if backend == \"local\":\r\n        # Локальный GigaAM-v3 e2e_rnnt через HuggingFace\r\n        return GigaAMRecognizer(\r\n            hf_token=config.local.hf_token,\r\n            device=config.local.device,\r\n        )\r\n\r\n    if backend == \"groq\":\r\n        return GroqWhisperRecognizer(config.groq)\r\n\r\n    if backend == \"openai\":\r\n        return OpenAIWhisperRecognizer(config.openai)\r\n\r\n    # Fallback: по умолчанию Groq\r\n    return GroqWhisperRecognizer(config.groq)"
+        }
+    ]
+}

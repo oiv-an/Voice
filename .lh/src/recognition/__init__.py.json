@@ -1,0 +1,38 @@
+{
+    "sourceFile": "src/recognition/__init__.py",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 5,
+            "patches": [
+                {
+                    "date": 1764289647989,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                },
+                {
+                    "date": 1764457739186,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -4,8 +4,9 @@\n \r\n from audio.recorder import AudioData\r\n from config.settings import RecognitionConfig\r\n from recognition.groq_api import GroqWhisperRecognizer\r\n+from recognition.gigaam_local import GigaAMRecognizer\r\n \r\n \r\n class IRecognizer(Protocol):\r\n     def transcribe(self, audio: AudioData) -> str:  # pragma: no cover - protocol\r\n@@ -15,13 +16,20 @@\n def create_recognizer(config: RecognitionConfig) -> IRecognizer:\r\n     \"\"\"\r\n     Factory for recognizers.\r\n \r\n-    MVP: only Groq backend is fully implemented.\r\n+    Поддерживаем три backend'а:\r\n+      - \"groq\"   — облачный Groq Whisper\r\n+      - \"openai\" — (зарезервировано, можно добавить позже)\r\n+      - \"local\"  — локальный GigaAM-v3-CTC (v2_ctc)\r\n     \"\"\"\r\n-    backend = config.backend.lower()\r\n+    backend = (config.backend or \"groq\").lower()\r\n \r\n+    if backend == \"local\":\r\n+        # Локальный GigaAM, модель фиксированная: v2_ctc\r\n+        return GigaAMRecognizer(model_name=\"v2_ctc\")\r\n+\r\n     if backend == \"groq\":\r\n         return GroqWhisperRecognizer(config.groq)\r\n \r\n-    # Fallback: use Groq even if config says otherwise, to keep MVP working.\r\n+    # Fallback: по умолчанию Groq\r\n     return GroqWhisperRecognizer(config.groq)\n\\ No newline at end of file\n"
+                },
+                {
+                    "date": 1764463329343,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -5,8 +5,9 @@\n from audio.recorder import AudioData\r\n from config.settings import RecognitionConfig\r\n from recognition.groq_api import GroqWhisperRecognizer\r\n from recognition.gigaam_local import GigaAMRecognizer\r\n+from recognition.openai_api import OpenAIWhisperRecognizer\r\n \r\n \r\n class IRecognizer(Protocol):\r\n     def transcribe(self, audio: AudioData) -> str:  # pragma: no cover - protocol\r\n@@ -18,9 +19,9 @@\n     Factory for recognizers.\r\n \r\n     Поддерживаем три backend'а:\r\n       - \"groq\"   — облачный Groq Whisper\r\n-      - \"openai\" — (зарезервировано, можно добавить позже)\r\n+      - \"openai\" — облачный OpenAI Whisper\r\n       - \"local\"  — локальный GigaAM-v3-CTC (v2_ctc)\r\n     \"\"\"\r\n     backend = (config.backend or \"groq\").lower()\r\n \r\n@@ -30,6 +31,9 @@\n \r\n     if backend == \"groq\":\r\n         return GroqWhisperRecognizer(config.groq)\r\n \r\n+    if backend == \"openai\":\r\n+        return OpenAIWhisperRecognizer(config.openai)\r\n+\r\n     # Fallback: по умолчанию Groq\r\n     return GroqWhisperRecognizer(config.groq)\n\\ No newline at end of file\n"
+                },
+                {
+                    "date": 1764465235311,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -25,10 +25,10 @@\n     \"\"\"\r\n     backend = (config.backend or \"groq\").lower()\r\n \r\n     if backend == \"local\":\r\n-        # Локальный GigaAM, модель фиксированная: v2_ctc\r\n-        return GigaAMRecognizer(model_name=\"v2_ctc\")\r\n+        # Локальный GigaAM-v3 e2e_rnnt через HuggingFace\r\n+        return GigaAMRecognizer()\r\n \r\n     if backend == \"groq\":\r\n         return GroqWhisperRecognizer(config.groq)\r\n \r\n"
+                },
+                {
+                    "date": 1764591244657,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -1,13 +1,13 @@\n from __future__ import annotations\r\n \r\n from typing import Protocol\r\n \r\n-from audio.recorder import AudioData\r\n-from config.settings import RecognitionConfig\r\n-from recognition.groq_api import GroqWhisperRecognizer\r\n-from recognition.gigaam_local import GigaAMRecognizer\r\n-from recognition.openai_api import OpenAIWhisperRecognizer\r\n+from src.audio.recorder import AudioData\r\n+from src.config.settings import RecognitionConfig\r\n+from src.recognition.groq_api import GroqWhisperRecognizer\r\n+from src.recognition.gigaam_local import GigaAMRecognizer\r\n+from src.recognition.openai_api import OpenAIWhisperRecognizer\r\n \r\n \r\n class IRecognizer(Protocol):\r\n     def transcribe(self, audio: AudioData) -> str:  # pragma: no cover - protocol\r\n"
+                },
+                {
+                    "date": 1764658281272,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -1,13 +1,13 @@\n from __future__ import annotations\r\n \r\n from typing import Protocol\r\n \r\n-from src.audio.recorder import AudioData\r\n-from src.config.settings import RecognitionConfig\r\n-from src.recognition.groq_api import GroqWhisperRecognizer\r\n-from src.recognition.gigaam_local import GigaAMRecognizer\r\n-from src.recognition.openai_api import OpenAIWhisperRecognizer\r\n+from audio.recorder import AudioData\r\n+from config.settings import RecognitionConfig\r\n+from recognition.groq_api import GroqWhisperRecognizer\r\n+from recognition.gigaam_local import GigaAMRecognizer\r\n+from recognition.openai_api import OpenAIWhisperRecognizer\r\n \r\n \r\n class IRecognizer(Protocol):\r\n     def transcribe(self, audio: AudioData) -> str:  # pragma: no cover - protocol\r\n@@ -20,14 +20,15 @@\n \r\n     Поддерживаем три backend'а:\r\n       - \"groq\"   — облачный Groq Whisper\r\n       - \"openai\" — облачный OpenAI Whisper\r\n-      - \"local\"  — локальный GigaAM-v3-CTC (v2_ctc)\r\n+      - \"local\"  — локальный GigaAM-v3 e2e_rnnt через HuggingFace\r\n     \"\"\"\r\n     backend = (config.backend or \"groq\").lower()\r\n \r\n     if backend == \"local\":\r\n         # Локальный GigaAM-v3 e2e_rnnt через HuggingFace\r\n+        # Текущая реализация GigaAMRecognizer не принимает аргументов конструктора.\r\n         return GigaAMRecognizer()\r\n \r\n     if backend == \"groq\":\r\n         return GroqWhisperRecognizer(config.groq)\r\n"
+                }
+            ],
+            "date": 1764289647989,
+            "name": "Commit-0",
+            "content": "from __future__ import annotations\r\n\r\nfrom typing import Protocol\r\n\r\nfrom audio.recorder import AudioData\r\nfrom config.settings import RecognitionConfig\r\nfrom recognition.groq_api import GroqWhisperRecognizer\r\n\r\n\r\nclass IRecognizer(Protocol):\r\n    def transcribe(self, audio: AudioData) -> str:  # pragma: no cover - protocol\r\n        ...\r\n\r\n\r\ndef create_recognizer(config: RecognitionConfig) -> IRecognizer:\r\n    \"\"\"\r\n    Factory for recognizers.\r\n\r\n    MVP: only Groq backend is fully implemented.\r\n    \"\"\"\r\n    backend = config.backend.lower()\r\n\r\n    if backend == \"groq\":\r\n        return GroqWhisperRecognizer(config.groq)\r\n\r\n    # Fallback: use Groq even if config says otherwise, to keep MVP working.\r\n    return GroqWhisperRecognizer(config.groq)"
+        }
+    ]
+}

@@ -132,6 +132,10 @@ class SettingsDialog(QDialog):
         self.openai_asr_model_edit = QLineEdit()
         asr_form.addRow("OpenAI ASR model:", self.openai_asr_model_edit)
 
+        # Локальный GigaAM-v3 (модель)
+        self.gigaam_model_edit = QLineEdit()
+        asr_form.addRow("GigaAM-v3 local model:", self.gigaam_model_edit)
+
         layout.addWidget(asr_group)
 
         # === Блок: постобработка (LLM) =========================================
@@ -188,6 +192,7 @@ class SettingsDialog(QDialog):
         # ASR‑модели
         self.groq_asr_model_edit.setText(rec.groq.model)
         self.openai_asr_model_edit.setText(rec.openai.model)
+        self.gigaam_model_edit.setText(rec.local.model)
 
         # LLM‑модели (постпроцессинг)
         self.post_enabled_checkbox.setChecked(settings.postprocess.enabled)
@@ -231,7 +236,10 @@ class SettingsDialog(QDialog):
         #     * OpenAI: пишем в recognition.openai.model_process
         new_recognition = RecognitionConfig(
             backend=backend,
-            local=old.recognition.local,
+            local=replace(
+                old.recognition.local,
+                model=(self.gigaam_model_edit.text().strip() or old.recognition.local.model),
+            ),
             openai=replace(
                 old.recognition.openai,
                 api_key=self.openai_api_key_edit.text().strip(),

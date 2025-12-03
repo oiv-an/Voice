@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QApplication
 
 from config.settings import AppSettings
@@ -15,7 +16,12 @@ from recognition.postprocessor import TextPostprocessor
 from utils.logger import setup_logging
 
 
-class App:
+class App(QObject):
+    # Сигналы для безопасного обновления UI из других потоков
+    state_changed = pyqtSignal(str)
+    message_shown = pyqtSignal(str, int)
+    text_updated = pyqtSignal(str, str)
+
     """
     Main application class: wires UI, hotkeys, audio recorder, recognizer and clipboard.
 
@@ -26,6 +32,7 @@ class App:
     """
 
     def __init__(self) -> None:
+        super().__init__()
         self.qt_app = QApplication(sys.argv)
 
         # Определяем базовую директорию приложения:
@@ -41,13 +48,18 @@ class App:
         # Load settings and logging (с учётом base_dir и config.local.yaml)
         self.settings = self._load_or_init_settings()
         setup_logging(self.settings.logging)
-
+        
         # Core components
         self.window = FloatingWindow(self.settings.ui)
         self.tray = SystemTrayIcon(self.window, self.settings.app)
         self.clipboard = ClipboardManager()
         self.audio_recorder = AudioRecorder(self.settings.audio)
+        # Основной распознаватель для текущего backend'а
         self.recognizer = create_recognizer(self.settings.recognition)
+        # Кэш распознавателей по backend'ам, чтобы не пересоздавать GigaAM на каждое распознавание
+        self._recognizers = {}
+        primary_backend = (self.settings.recognition.backend or "groq").lower()
+        self._recognizers[primary_backend] = self.recognizer
 
         # Постпроцессинг текста.
         # ВАЖНО: сразу прокидываем в postprocess.* тот же ключ, model_process и base_url,
@@ -110,7 +122,23 @@ class App:
         self.tray.toggle_debug_requested.connect(self.toggle_debug_mode)
         self.tray.exit_requested.connect(self.quit)
 
+        # Подключаем сигналы к слотам окна
+        self.state_changed.connect(self.window.set_state)
+        self.message_shown.connect(self.window.show_message)
+        self.text_updated.connect(self._on_text_updated)
+
     # --------------------------------------------------------------------- UI
+
+    def _on_text_updated(self, raw_text: str, processed_text: str) -> None:
+        """Слот для обновления текстовых полей в окне."""
+        if hasattr(self.window, "set_raw_text"):
+            self.window.set_raw_text(raw_text or "")
+        else:
+            # fallback для старых версий окна
+            self.window.result_label.setText(processed_text or "")
+
+        if hasattr(self.window, "set_processed_text"):
+            self.window.set_processed_text(processed_text or "")
 
     def show_window(self) -> None:
         self.window.show()
@@ -148,13 +176,17 @@ class App:
 
         # обновляем настройки в памяти
         self.settings = new_settings
-
+        
         # сохраняем в config.yaml
         AppSettings.save_default(self.settings)
-
+        
         # пересоздаём recognizer и postprocessor с учётом новых настроек
+        # и сбрасываем кэш распознавателей по backend'ам.
+        self._recognizers = {}
         self.recognizer = create_recognizer(self.settings.recognition)
-
+        primary_backend = (self.settings.recognition.backend or "groq").lower()
+        self._recognizers[primary_backend] = self.recognizer
+        
         post_cfg = self.settings.postprocess
         rec_cfg = self.settings.recognition
 
@@ -219,26 +251,73 @@ class App:
 
     # ----------------------------------------------------------- Processing
 
+    def _get_or_create_recognizer(self, backend: str):
+        from dataclasses import replace  # локальный импорт, чтобы избежать циклов
+
+        backend = (backend or "groq").lower()
+        cache = getattr(self, "_recognizers", None)
+        if cache is None:
+            cache = {}
+            self._recognizers = cache
+            primary = (self.settings.recognition.backend or "groq").lower()
+            cache[primary] = self.recognizer
+
+        if backend in cache:
+            return cache[backend]
+
+        rec_cfg = self.settings.recognition
+        tmp_cfg = replace(rec_cfg, backend=backend)
+        recognizer = create_recognizer(tmp_cfg)
+        cache[backend] = recognizer
+        return recognizer
+    
+    # ----------------------------------------------------------- Processing
+    
     def _process_audio(self, audio_data) -> None:
         """
         Синхронная обработка аудио с каскадом backend'ов:
         1) основной backend из настроек (groq / openai / local),
         2) при ошибке — fallback на остальные по приоритету.
+
+        Дополнительно:
+        - логируем все распознавания в отдельный logfile с указанием:
+          * времени;
+          * backend'а;
+          * длительности аудио;
+          * исходного и обработанного текста.
         """
         from loguru import logger
         from pathlib import Path
         from datetime import datetime
         from recognition.postprocessor import TextPostprocessor as TP  # для _simple_cleanup
-        from recognition import create_recognizer  # каскадное создание по backend'у
 
-        self.window.set_state("processing")
+        self.state_changed.emit("processing")
 
-        # Собираем приоритетный список backend'ов:
-        # сначала выбранный пользователем, затем остальные.
+        # ------------------------ вычисляем длительность аудио -----------------
+        try:
+            import numpy as _np  # локальный импорт, чтобы не тянуть при импорте модуля
+
+            samples = audio_data.samples
+            sample_rate = getattr(audio_data, "sample_rate", None) or getattr(
+                audio_data, "rate", None
+            ) or 16000
+
+            if isinstance(samples, _np.ndarray):
+                total_samples = samples.shape[0]
+            else:
+                samples = _np.asarray(samples)
+                total_samples = samples.shape[0]
+
+            audio_duration_sec = float(total_samples) / float(sample_rate or 1)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to compute audio duration: {}", exc)
+            audio_duration_sec = -1.0
+
+        # ------------------------ каскад backend'ов ----------------------------
         primary = (self.settings.recognition.backend or "groq").lower()
         all_backends = ["groq", "openai", "local"]
         cascade = [b for b in [primary] + all_backends if b in all_backends]
-        # Убираем дубликаты, сохраняя порядок
+
         seen = set()
         ordered_backends = []
         for b in cascade:
@@ -248,22 +327,18 @@ class App:
 
         last_error: str | None = None
         raw_text: str | None = None
+        used_backend: str | None = None
 
         for backend in ordered_backends:
             try:
                 logger.info("Trying recognition backend: {}", backend)
-                # Временно подменяем backend в настройках для фабрики
-                original_backend = self.settings.recognition.backend
-                self.settings.recognition.backend = backend
-                recognizer = create_recognizer(self.settings.recognition)
-                # ВАЖНО: возвращаем исходный backend в настройках
-                self.settings.recognition.backend = original_backend
+                recognizer = self._get_or_create_recognizer(backend)
 
                 raw_text = recognizer.transcribe(audio_data)
+                used_backend = backend
                 logger.info("Recognition succeeded with backend: {}", backend)
                 break
             except RuntimeError as exc:
-                # Осмысленная ошибка — логируем и пробуем следующий backend
                 logger.error("Recognition error on backend {}: {}", backend, exc)
                 last_error = str(exc)
                 continue
@@ -273,10 +348,9 @@ class App:
                 continue
 
         if raw_text is None:
-            # Все backend'ы упали — показываем последнюю ошибку
             msg = last_error or "Не удалось распознать аудио ни одним backend'ом."
-            self.window.set_state("error")
-            self.window.show_message(msg)
+            self.state_changed.emit("error")
+            self.message_shown.emit(msg, 3000)
             return
 
         from loguru import logger as _logger
@@ -291,22 +365,13 @@ class App:
                 processed_text = self.postprocessor.process(raw_text or "")
             except RuntimeError as exc:
                 _logger.error("LLM postprocess error: {}", exc)
-                self.window.show_message(str(exc))
+                self.message_shown.emit(str(exc), 3000)
             except Exception as exc:  # noqa: BLE001
                 _logger.exception("Unexpected LLM postprocess error: {}", exc)
-                self.window.show_message("Ошибка LLM-постпроцессинга. См. логи.")
+                self.message_shown.emit("Ошибка LLM-постпроцессинга. См. логи.", 3000)
 
-            # 4) показать оба варианта в окне
-            try:
-                if hasattr(self.window, "set_raw_text"):
-                    self.window.set_raw_text(raw_text or "")
-                else:
-                    self.window.result_label.setText(processed_text or "")
-
-                if hasattr(self.window, "set_processed_text"):
-                    self.window.set_processed_text(processed_text or "")
-            except Exception:
-                _logger.debug("window text update failed", exc_info=True)
+            # 4) показать оба варианта в окне (через сигнал)
+            self.text_updated.emit(raw_text or "", processed_text or "")
 
             # 5) положить ОБРАБОТАННЫЙ текст в буфер обмена
             self.clipboard.copy(processed_text or "")
@@ -316,7 +381,12 @@ class App:
 
             # 7) сохранить распознавание в отдельный текстовый лог с ротацией по ~3 МБ
             try:
-                base_dir = Path(__file__).resolve().parents[2]
+                # Базовая директория приложения (та же логика, что и в App._load_or_init_settings)
+                if getattr(sys, "frozen", False):
+                    base_dir = Path(sys.executable).resolve().parent
+                else:
+                    base_dir = Path(__file__).resolve().parents[1]
+
                 log_dir = base_dir / "logs"
                 log_dir.mkdir(parents=True, exist_ok=True)
                 transcript_path = log_dir / "transcripts.log"
@@ -327,21 +397,25 @@ class App:
                     rotated = log_dir / f"transcripts_{ts}.log"
                     transcript_path.rename(rotated)
 
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                backend_str = used_backend or (self.settings.recognition.backend or "unknown")
+
                 with transcript_path.open("a", encoding="utf-8") as f:
                     f.write(
-                        f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]\\n"
-                        f"RAW: { (raw_text or '').strip() }\\n"
-                        f"PROCESSED: { (processed_text or '').strip() }\\n"
-                        "----------------------------------------\\n"
+                        f"[{timestamp}] backend={backend_str} "
+                        f"duration={audio_duration_sec:.3f}s\n"
+                        f"RAW: {(raw_text or '').strip()}\n"
+                        f"PROCESSED: {(processed_text or '').strip()}\n"
+                        "----------------------------------------\n"
                     )
             except Exception as exc:  # noqa: BLE001
                 _logger.exception("Failed to append transcript log: {}", exc)
 
-            self.window.set_state("ready")
+            self.state_changed.emit("ready")
         except Exception as exc:  # noqa: BLE001
             _logger.exception("Unexpected error during post-processing: {}", exc)
-            self.window.set_state("error")
-            self.window.show_message("Неизвестная ошибка постобработки. См. логи.")
+            self.state_changed.emit("error")
+            self.message_shown.emit("Неизвестная ошибка постобработки. См. логи.", 3000)
 
     # -------------------------------------------------------------- Debug
 
@@ -390,6 +464,7 @@ class App:
                         "language": "ru",
                         "beam_size": 5,
                         "temperature": 0.0,
+                        "hf_token": "",
                     },
                     "openai": {
                         "api_key": "",
@@ -403,7 +478,7 @@ class App:
                     "groq": {
                         "api_key": "",
                         "model": "whisper-large-v3",
-                        "model_process": "llama-3.3-70b-versatile",
+                        "model_process": "moonshotai/kimi-k2-instruct",
                         "language": "ru",
                     },
                 },
@@ -414,7 +489,7 @@ class App:
                     "mode": "llm",
                     "llm_backend": "groq",
                     "groq": {
-                        "model": "llama-3.3-70b-versatile",
+                        "model": "moonshotai/kimi-k2-instruct",
                     },
                     "openai": {
                         "model": "gpt-5.1",

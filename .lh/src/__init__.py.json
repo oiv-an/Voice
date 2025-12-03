@@ -1,0 +1,18 @@
+{
+    "sourceFile": "src/__init__.py",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 0,
+            "patches": [
+                {
+                    "date": 1764591067426,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                }
+            ],
+            "date": 1764591067426,
+            "name": "Commit-0",
+            "content": "\"\"\"\r\nКорневой пакет приложения Voice.\r\n\"\"\""
+        }
+    ]
+}

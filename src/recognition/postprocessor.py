@@ -63,8 +63,15 @@ class TextPostprocessor:
         try:
             llm_text = self._llm_cleanup(cleaned)
             return llm_text or cleaned
+        except RuntimeError as exc:
+            # Эти ошибки уже залогированы в _llm_groq/_llm_openai.
+            # Просто возвращаем очищенный текст.
+            logger.warning("LLM postprocess failed, fallback to regex-only: {}", exc)
+            return cleaned
         except Exception as exc:  # noqa: BLE001
-            logger.exception("LLM postprocess failed, fallback to regex-only: {}", exc)
+            logger.exception(
+                "Unexpected LLM postprocess error, fallback to regex-only: {}", exc
+            )
             return cleaned
 
     # ------------------------------------------------------------------ simple regex
@@ -156,41 +163,35 @@ class TextPostprocessor:
         }
 
         try:
-            resp = httpx.post(url, headers=headers, json=payload, timeout=30.0)
+            # Короткий таймаут 2 секунды, чтобы не подвешивать постпроцессинг.
+            # Короткий таймаут 2 секунды, чтобы не подвешивать постпроцессинг.
+            resp = httpx.post(url, headers=headers, json=payload, timeout=2.0)
+            resp.raise_for_status()
         except httpx.TimeoutException as exc:
-            # Явно фиксируем, что это ошибка LLM Groq, а не распознавания.
-            logger.error(
-                "LLM (Groq) timeout, using regex-only postprocess. model={}, error={}",
-                model,
-                exc,
-            )
-            raise RuntimeError(
-                f"Groq LLM timeout (model={model}): {exc}"
-            ) from exc
+            logger.error("LLM (Groq) timeout for model {}: {}", model, exc)
+            raise RuntimeError(f"Timeout connecting to Groq LLM: {exc}") from exc
         except httpx.RequestError as exc:
+            logger.error("LLM (Groq) network error for model {}: {}", model, exc)
+            raise RuntimeError(f"Network error connecting to Groq LLM: {exc}") from exc
+        except httpx.HTTPStatusError as exc:
             logger.error(
-                "LLM (Groq) network error, using regex-only postprocess. model={}, error={}",
+                "LLM (Groq) HTTP error {} for model {}: {}",
+                exc.response.status_code,
                 model,
-                exc,
+                exc.response.text,
             )
+            if exc.response.status_code == 401:
+                raise RuntimeError("Groq LLM: Invalid API key (401).")
+            if exc.response.status_code == 429:
+                raise RuntimeError("Groq LLM: Rate limit exceeded (429).")
+            if exc.response.status_code == 400:
+                raise RuntimeError(
+                    "Groq LLM: The selected model may no longer be supported (400)."
+                )
             raise RuntimeError(
-                f"Groq LLM network error (model={model}): {exc}"
+                f"Groq LLM server error: {exc.response.status_code}"
             ) from exc
 
-        if resp.status_code == 401:
-            raise RuntimeError("Groq LLM: неверный или отсутствующий API‑ключ (401).")
-        if resp.status_code == 429:
-            raise RuntimeError("Groq LLM: превышен лимит запросов (429). Попробуйте позже.")
-        if resp.status_code == 400:
-            # Специальная обработка случая, когда модель снята с поддержки.
-            logger.error("Groq LLM HTTP 400: {}", resp.text[:500])
-            raise RuntimeError(
-                "Groq LLM: выбранная модель больше не поддерживается (400). "
-                "Откройте настройки (⚙️) и укажите актуальную модель Groq LLM."
-            )
-        if not resp.is_success:
-            logger.error("Groq LLM HTTP {}: {}", resp.status_code, resp.text[:500])
-            raise RuntimeError(f"Groq LLM: ошибка сервера ({resp.status_code}).")
 
         try:
             data = resp.json()
@@ -272,21 +273,31 @@ class TextPostprocessor:
         }
 
         try:
-            resp = httpx.post(url, headers=headers, json=payload, timeout=30.0)
+            # Короткий таймаут 2 секунды, чтобы не подвешивать постпроцессинг.
+            # Короткий таймаут 2 секунды, чтобы не подвешивать постпроцессинг.
+            resp = httpx.post(url, headers=headers, json=payload, timeout=2.0)
+            resp.raise_for_status()
         except httpx.TimeoutException as exc:
-            logger.exception("OpenAI LLM timeout: {}", exc)
-            raise RuntimeError("OpenAI LLM: превышено время ожидания ответа.") from exc
+            logger.error("OpenAI LLM timeout for model {}: {}", model, exc)
+            raise RuntimeError(f"Timeout connecting to OpenAI LLM: {exc}") from exc
         except httpx.RequestError as exc:
-            logger.exception("OpenAI LLM network error: {}", exc)
-            raise RuntimeError("OpenAI LLM: сетевая ошибка при обращении к API.") from exc
+            logger.error("OpenAI LLM network error for model {}: {}", model, exc)
+            raise RuntimeError(f"Network error connecting to OpenAI LLM: {exc}") from exc
+        except httpx.HTTPStatusError as exc:
+            logger.error(
+                "OpenAI LLM HTTP error {} for model {}: {}",
+                exc.response.status_code,
+                model,
+                exc.response.text,
+            )
+            if exc.response.status_code == 401:
+                raise RuntimeError("OpenAI LLM: Invalid API key (401).")
+            if exc.response.status_code == 429:
+                raise RuntimeError("OpenAI LLM: Rate limit exceeded (429).")
+            raise RuntimeError(
+                f"OpenAI LLM server error: {exc.response.status_code}"
+            ) from exc
 
-        if resp.status_code == 401:
-            raise RuntimeError("OpenAI LLM: неверный или отсутствующий API‑ключ (401).")
-        if resp.status_code == 429:
-            raise RuntimeError("OpenAI LLM: превышен лимит запросов (429). Попробуйте позже.")
-        if not resp.is_success:
-            logger.error("OpenAI LLM HTTP {}: {}", resp.status_code, resp.text[:500])
-            raise RuntimeError(f"OpenAI LLM: ошибка сервера ({resp.status_code}).")
 
         try:
             data = resp.json()
