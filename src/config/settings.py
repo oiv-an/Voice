@@ -15,7 +15,7 @@ import yaml
 @dataclass
 class AppInfoConfig:
     name: str = "VoiceCapture"
-    version: str = "1.0.0"
+    version: str = "1.1.0"
     language: str = "ru"
     debug: bool = False
 
@@ -23,6 +23,7 @@ class AppInfoConfig:
 @dataclass
 class HotkeysConfig:
     record: str = "ctrl+win"
+    record_idea: str = "ctrl+win+alt"
     cancel: str = "esc"
     toggle_window: str = "ctrl+alt+s"
     toggle_debug: str = "ctrl+alt+d"
@@ -64,7 +65,7 @@ class GroqRecognitionConfig:
     api_key: str = "gsk-..."
     model: str = "whisper-large-v3"
     # Модель для постобработки текста (LLM) — одно поле рядом с моделью распознавания.
-    model_process: str = "llama-3.3-70b-versatile"
+    model_process: str = "moonshotai/kimi-k2-instruct"
     language: str = "ru"
 
 
@@ -82,7 +83,7 @@ class RecognitionConfig:
 # совместимости структуры. Модели LLM берём из recognition.*.model_process.
 @dataclass
 class GroqPostprocessConfig:
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "moonshotai/kimi-k2-instruct"
 
 
 @dataclass

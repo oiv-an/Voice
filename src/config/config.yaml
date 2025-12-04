@@ -34,14 +34,14 @@ recognition:
   groq:
     api_key: ''                      # пользователь вводит свой ключ
     model: whisper-large-v3
-    model_process: llama-3.3-70b-versatile
+    model_process: moonshotai/kimi-k2-instruct
     language: ru
 postprocess:
   enabled: true
   mode: llm
   llm_backend: groq
   groq:
-    model: llama-3.3-70b-versatile
+    model: moonshotai/kimi-k2-instruct
   openai:
     model: gpt-5.1
     base_url: https://api.openai.com/v1

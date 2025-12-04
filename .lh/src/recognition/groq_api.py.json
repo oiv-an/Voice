@@ -3,7 +3,7 @@
     "activeCommit": 0,
     "commits": [
         {
-            "activePatchIndex": 3,
+            "activePatchIndex": 8,
             "patches": [
                 {
                     "date": 1764289619668,
@@ -20,6 +20,26 @@
                 {
                     "date": 1764591261159,
                     "content": "Index: \n===================================================================\n--- \n+++ \n@@ -8,10 +8,10 @@\n import requests  # type: ignore[import]\r\n import soundfile as sf  # type: ignore[import]\r\n from loguru import logger  # type: ignore[import]\r\n \r\n-from config.settings import GroqRecognitionConfig\r\n-from audio.recorder import AudioData\r\n+from src.config.settings import GroqRecognitionConfig\r\n+from src.audio.recorder import AudioData\r\n \r\n \r\n GROQ_TRANSCRIBE_URL = \"https://api.groq.com/openai/v1/audio/transcriptions\"\r\n \r\n"
+                },
+                {
+                    "date": 1764711314397,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -8,10 +8,10 @@\n import requests  # type: ignore[import]\r\n import soundfile as sf  # type: ignore[import]\r\n from loguru import logger  # type: ignore[import]\r\n \r\n-from src.config.settings import GroqRecognitionConfig\r\n-from src.audio.recorder import AudioData\r\n+from config.settings import GroqRecognitionConfig\r\n+from audio.recorder import AudioData\r\n \r\n \r\n GROQ_TRANSCRIBE_URL = \"https://api.groq.com/openai/v1/audio/transcriptions\"\r\n \r\n@@ -67,12 +67,14 @@\n                 )\r\n                 # Если дошли до сюда — HTTP-запрос выполнен, выходим из цикла\r\n                 break\r\n             except requests.Timeout as exc:  # type: ignore[attr-defined]\r\n-                logger.exception(\"Groq request timeout (attempt {}): {}\", attempt, exc)\r\n+                # Логируем кратко без полного traceback, чтобы не засорять консоль.\r\n+                logger.error(\"Groq request timeout (attempt {}): {}\", attempt, exc)\r\n                 last_exc = exc\r\n             except requests.RequestException as exc:  # type: ignore[attr-defined]\r\n-                logger.exception(\"Groq network error (attempt {}): {}\", attempt, exc)\r\n+                # Любая другая сетевая ошибка Groq — тоже без гигантского stacktrace.\r\n+                logger.error(\"Groq network error (attempt {}): {}\", attempt, exc)\r\n                 last_exc = exc\r\n \r\n             if attempt == 1:\r\n                 # Пауза 1 секунда перед второй попыткой\r\n"
+                },
+                {
+                    "date": 1764711504452,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -62,9 +62,9 @@\n                     GROQ_TRANSCRIBE_URL,\r\n                     headers=headers,\r\n                     files=files,\r\n                     data=data,\r\n-                    timeout=60,\r\n+                    timeout=2,\r\n                 )\r\n                 # Если дошли до сюда — HTTP-запрос выполнен, выходим из цикла\r\n                 break\r\n             except requests.Timeout as exc:  # type: ignore[attr-defined]\r\n"
+                },
+                {
+                    "date": 1764722450230,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -62,9 +62,9 @@\n                     GROQ_TRANSCRIBE_URL,\r\n                     headers=headers,\r\n                     files=files,\r\n                     data=data,\r\n-                    timeout=2,\r\n+                    timeout=5,\r\n                 )\r\n                 # Если дошли до сюда — HTTP-запрос выполнен, выходим из цикла\r\n                 break\r\n             except requests.Timeout as exc:  # type: ignore[attr-defined]\r\n"
+                },
+                {
+                    "date": 1764795149730,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -62,9 +62,9 @@\n                     GROQ_TRANSCRIBE_URL,\r\n                     headers=headers,\r\n                     files=files,\r\n                     data=data,\r\n-                    timeout=5,\r\n+                    timeout=15,\r\n                 )\r\n                 # Если дошли до сюда — HTTP-запрос выполнен, выходим из цикла\r\n                 break\r\n             except requests.Timeout as exc:  # type: ignore[attr-defined]\r\n"
+                },
+                {
+                    "date": 1764796876836,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -62,9 +62,9 @@\n                     GROQ_TRANSCRIBE_URL,\r\n                     headers=headers,\r\n                     files=files,\r\n                     data=data,\r\n-                    timeout=15,\r\n+                    timeout=10,\r\n                 )\r\n                 # Если дошли до сюда — HTTP-запрос выполнен, выходим из цикла\r\n                 break\r\n             except requests.Timeout as exc:  # type: ignore[attr-defined]\r\n"
                 }
             ],
             "date": 1764289619668,

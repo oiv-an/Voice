@@ -1,4 +1,6 @@
 import sys
+import time
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -21,6 +23,7 @@ class App(QObject):
     state_changed = pyqtSignal(str)
     message_shown = pyqtSignal(str, int)
     text_updated = pyqtSignal(str, str)
+    idea_added = pyqtSignal(str)
 
     """
     Main application class: wires UI, hotkeys, audio recorder, recognizer and clipboard.
@@ -100,15 +103,22 @@ class App(QObject):
 
         # State
         self._is_recording: bool = False
+        self._is_idea: bool = False # True, if the current recording is an idea
+        self._last_audio_data: Optional[any] = None
+        self._processing_lock = threading.Lock()
 
         # Hotkeys
         self.hotkeys = HotKeyManager(
             record_hotkey=self.settings.hotkeys.record,
+            record_idea_hotkey=self.settings.hotkeys.record_idea,
             cancel_hotkey=self.settings.hotkeys.cancel,
             toggle_window_hotkey=self.settings.hotkeys.toggle_window,
             toggle_debug_hotkey=self.settings.hotkeys.toggle_debug,
             on_record_press=self.start_recording,
             on_record_release=self.stop_recording,
+            on_record_idea_press=self.start_idea_recording,
+            on_record_idea_release=self.stop_recording, # Stop is the same for both
+            on_convert_to_idea=self.convert_to_idea,
             on_cancel=self.cancel_recording,
             on_toggle_window=self.toggle_window_visibility,
             on_toggle_debug=self.toggle_debug_mode,
@@ -117,6 +127,7 @@ class App(QObject):
         # Wire UI signals
         self.window.settings_requested.connect(self.open_settings_dialog)
         self.window.exit_requested.connect(self.quit)
+        self.window.retry_requested.connect(self._retry_processing)
         self.tray.show_window_requested.connect(self.show_window)
         self.tray.settings_requested.connect(self.open_settings_dialog)
         self.tray.toggle_debug_requested.connect(self.toggle_debug_mode)
@@ -126,6 +137,7 @@ class App(QObject):
         self.state_changed.connect(self.window.set_state)
         self.message_shown.connect(self.window.show_message)
         self.text_updated.connect(self._on_text_updated)
+        self.idea_added.connect(self.window.add_idea)
 
     # --------------------------------------------------------------------- UI
 
@@ -223,31 +235,59 @@ class App(QObject):
 
     # ----------------------------------------------------------------- Hotkeys
 
-    def start_recording(self) -> None:
+    def _retry_processing(self) -> None:
+        """Запускает повторную обработку последнего записанного аудио."""
+        from loguru import logger
+
+        if self._last_audio_data:
+            logger.info("Retrying processing for the last audio data.")
+            # Запускаем в новом потоке, чтобы не блокировать UI
+            thread = threading.Thread(target=self._process_audio, args=(self._last_audio_data,))
+            thread.start()
+        else:
+            logger.warning("Retry requested, but no audio data is available.")
+            self.state_changed.emit("idle")
+
+    def start_recording(self, is_idea: bool = False) -> None:
         if self._is_recording:
             return
         self._is_recording = True
+        self._is_idea = is_idea
+        
+        self._last_audio_data = None
+        self.window.hide_retry_button()
         self.window.set_state("recording")
 
         def on_finished(audio_data):
-            # Этот колбэк вызывается из потока рекордера.
-            # Возвращаемся к синхронной обработке, как в рабочем варианте.
-            self._process_audio(audio_data)
+            # The final `is_idea` flag is checked inside _process_audio
+            thread = threading.Thread(target=self._process_audio, args=(audio_data,))
+            thread.start()
 
         self.audio_recorder.start(on_finished=on_finished)
 
     def stop_recording(self) -> None:
         if not self._is_recording:
             return
-        self._is_recording = False
+        # We don't reset flags here, _process_audio will do it
         self.audio_recorder.stop()
 
+    def start_idea_recording(self) -> None:
+        """Starts a recording that is immediately flagged as an idea."""
+        self.start_recording(is_idea=True)
+
+    def convert_to_idea(self) -> None:
+        """If a recording is in progress, flag it as an idea."""
+        if self._is_recording:
+            self._is_idea = True
+            # Optionally, provide some visual feedback
+            self.message_shown.emit("Запись будет добавлена в идеи", 1000)
+
     def cancel_recording(self) -> None:
-        if not self._is_recording:
-            return
-        self._is_recording = False
-        self.audio_recorder.cancel()
-        self.window.set_state("idle")
+        if self._is_recording:
+            self._is_recording = False
+            self._is_idea = False
+            self.audio_recorder.cancel()
+            self.window.set_state("idle")
 
     # ----------------------------------------------------------- Processing
 
@@ -275,147 +315,179 @@ class App(QObject):
     
     def _process_audio(self, audio_data) -> None:
         """
-        Синхронная обработка аудио с каскадом backend'ов:
-        1) основной backend из настроек (groq / openai / local),
-        2) при ошибке — fallback на остальные по приоритету.
-
-        Дополнительно:
-        - логируем все распознавания в отдельный logfile с указанием:
-          * времени;
-          * backend'а;
-          * длительности аудио;
-          * исходного и обработанного текста.
+        Синхронная обработка аудио.
+        Флаг self._is_idea определяет, нужно ли добавлять результат в список идей.
         """
         from loguru import logger
         from pathlib import Path
         from datetime import datetime
-        from recognition.postprocessor import TextPostprocessor as TP  # для _simple_cleanup
+        from recognition.postprocessor import TextPostprocessor as TP
 
-        self.state_changed.emit("processing")
-
-        # ------------------------ вычисляем длительность аудио -----------------
-        try:
-            import numpy as _np  # локальный импорт, чтобы не тянуть при импорте модуля
-
-            samples = audio_data.samples
-            sample_rate = getattr(audio_data, "sample_rate", None) or getattr(
-                audio_data, "rate", None
-            ) or 16000
-
-            if isinstance(samples, _np.ndarray):
-                total_samples = samples.shape[0]
-            else:
-                samples = _np.asarray(samples)
-                total_samples = samples.shape[0]
-
-            audio_duration_sec = float(total_samples) / float(sample_rate or 1)
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Failed to compute audio duration: {}", exc)
-            audio_duration_sec = -1.0
-
-        # ------------------------ каскад backend'ов ----------------------------
-        primary = (self.settings.recognition.backend or "groq").lower()
-        all_backends = ["groq", "openai", "local"]
-        cascade = [b for b in [primary] + all_backends if b in all_backends]
-
-        seen = set()
-        ordered_backends = []
-        for b in cascade:
-            if b not in seen:
-                seen.add(b)
-                ordered_backends.append(b)
-
-        last_error: str | None = None
-        raw_text: str | None = None
-        used_backend: str | None = None
-
-        for backend in ordered_backends:
-            try:
-                logger.info("Trying recognition backend: {}", backend)
-                recognizer = self._get_or_create_recognizer(backend)
-
-                raw_text = recognizer.transcribe(audio_data)
-                used_backend = backend
-                logger.info("Recognition succeeded with backend: {}", backend)
-                break
-            except RuntimeError as exc:
-                logger.error("Recognition error on backend {}: {}", backend, exc)
-                last_error = str(exc)
-                continue
-            except Exception as exc:  # noqa: BLE001
-                logger.exception("Unexpected recognition error on backend {}: {}", backend, exc)
-                last_error = f"Неизвестная ошибка backend '{backend}'. См. логи."
-                continue
-
-        if raw_text is None:
-            msg = last_error or "Не удалось распознать аудио ни одним backend'ом."
-            self.state_changed.emit("error")
-            self.message_shown.emit(msg, 3000)
+        if not self._processing_lock.acquire(blocking=False):
+            logger.warning("Processing is already in progress. Skipping new request.")
             return
 
-        from loguru import logger as _logger
-
         try:
-            # 2) regex-очистка (базовый препроцессинг всегда)
-            regex_text = TP._simple_cleanup(raw_text or "")
+            # Reset recording state immediately after starting processing
+            self._is_recording = False
+            is_idea_flag = self._is_idea
+            self._is_idea = False # Reset for the next recording
 
-            # 3) LLM-постпроцессинг (если включён в конфиге)
-            processed_text = regex_text
+            self._last_audio_data = audio_data
+            self.state_changed.emit("processing")
+
+            # ------------------------ вычисляем длительность аудио -----------------
             try:
-                processed_text = self.postprocessor.process(raw_text or "")
-            except RuntimeError as exc:
-                _logger.error("LLM postprocess error: {}", exc)
-                self.message_shown.emit(str(exc), 3000)
-            except Exception as exc:  # noqa: BLE001
-                _logger.exception("Unexpected LLM postprocess error: {}", exc)
-                self.message_shown.emit("Ошибка LLM-постпроцессинга. См. логи.", 3000)
+                import numpy as _np
+                samples = audio_data.samples
+                sample_rate = getattr(audio_data, "sample_rate", 16000)
+                total_samples = samples.shape[0]
+                audio_duration_sec = float(total_samples) / float(sample_rate)
+            except Exception as exc:
+                logger.exception("Failed to compute audio duration: {}", exc)
+                audio_duration_sec = -1.0
 
-            # 4) показать оба варианта в окне (через сигнал)
-            self.text_updated.emit(raw_text or "", processed_text or "")
+            # ------------------------ каскад backend'ов с ретраями ----------------
+            primary = (self.settings.recognition.backend or "groq").lower()
+            all_backends = ["groq", "openai", "local"]
+            cascade = [b for b in [primary] + all_backends if b in all_backends]
+            seen = set()
+            ordered_backends = [b for b in cascade if not (b in seen or seen.add(b))]
 
-            # 5) положить ОБРАБОТАННЫЙ текст в буфер обмена
-            self.clipboard.copy(processed_text or "")
+            MAX_ATTEMPTS = 5
+            RETRY_DELAY_SEC = 2
+            BACKEND_SWITCH_DELAY_SEC = 1
 
-            # 6) авто-вставка текста через Ctrl+V (с ретраями внутри ClipboardManager)
-            self.clipboard.paste()
+            last_error: str | None = None
+            raw_text: str | None = None
+            used_backend: str | None = None
 
-            # 7) сохранить распознавание в отдельный текстовый лог с ротацией по ~3 МБ
+            for attempt in range(MAX_ATTEMPTS):
+                logger.info(f"Recognition attempt #{attempt + 1}/{MAX_ATTEMPTS}")
+                for backend in ordered_backends:
+                    try:
+                        logger.info("Trying recognition backend: {}", backend)
+                        recognizer = self._get_or_create_recognizer(backend)
+                        raw_text = recognizer.transcribe(audio_data)
+                        used_backend = backend
+                        logger.info("Recognition succeeded with backend: {}", backend)
+                        break  # Exit inner loop (backends)
+                    except Exception as exc:
+                        logger.error("Recognition error on backend {}: {}", backend, exc)
+                        last_error = str(exc)
+                        time.sleep(BACKEND_SWITCH_DELAY_SEC)
+                        continue
+                
+                if raw_text is not None:
+                    break  # Exit outer loop (attempts)
+
+                if attempt < MAX_ATTEMPTS - 1:
+                    logger.info(f"Attempt #{attempt + 1} failed. Retrying in {RETRY_DELAY_SEC} seconds...")
+                    time.sleep(RETRY_DELAY_SEC)
+
+            if raw_text is None:
+                msg = "Ошибка соединения. Настройте соединение и попробуйте еще раз."
+                self.state_changed.emit("error")
+                self.message_shown.emit(msg, 0)  # 0 timeout to keep it visible
+                self.window.show_retry_button()
+                return
+
+            from loguru import logger as _logger
+
             try:
-                # Базовая директория приложения (та же логика, что и в App._load_or_init_settings)
-                if getattr(sys, "frozen", False):
-                    base_dir = Path(sys.executable).resolve().parent
-                else:
-                    base_dir = Path(__file__).resolve().parents[1]
+                # 2) regex-очистка (базовый препроцессинг всегда)
+                regex_text = TP._simple_cleanup(raw_text or "")
 
-                log_dir = base_dir / "logs"
-                log_dir.mkdir(parents=True, exist_ok=True)
-                transcript_path = log_dir / "transcripts.log"
+                # 3) LLM-постпроцессинг (если включён в конфиге)
+                processed_text = regex_text
+                try:
+                    processed_text = self.postprocessor.process(raw_text or "")
+                except RuntimeError as exc:
+                    _logger.error("LLM postprocess error: {}", exc)
+                    self.message_shown.emit(str(exc), 3000)
+                except Exception as exc:  # noqa: BLE001
+                    _logger.exception("Unexpected LLM postprocess error: {}", exc)
+                    self.message_shown.emit("Ошибка LLM-постпроцессинга. См. логи.", 3000)
 
-                max_size_bytes = 3 * 1024 * 1024
-                if transcript_path.exists() and transcript_path.stat().st_size >= max_size_bytes:
-                    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    rotated = log_dir / f"transcripts_{ts}.log"
-                    transcript_path.rename(rotated)
+                # 4) показать оба варианта в окне (через сигнал)
+                self.text_updated.emit(raw_text or "", processed_text or "")
 
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                backend_str = used_backend or (self.settings.recognition.backend or "unknown")
+                # 5) положить ОБРАБОТАННЫЙ текст в буфер обмена (ВСЕГДА)
+                self.clipboard.copy(processed_text or "")
 
-                with transcript_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        f"[{timestamp}] backend={backend_str} "
-                        f"duration={audio_duration_sec:.3f}s\n"
-                        f"RAW: {(raw_text or '').strip()}\n"
-                        f"PROCESSED: {(processed_text or '').strip()}\n"
-                        "----------------------------------------\n"
-                    )
+                # 6) авто-вставка текста через Ctrl+V (ВСЕГДА)
+                self.clipboard.paste()
+
+                # 7) если это была идея, добавить в список идей
+                if is_idea_flag:
+                    self.idea_added.emit(processed_text or "")
+                    self._log_idea(processed_text or "")
+
+                # 8) сохранить распознавание в отдельный текстовый лог с ротацией по ~3 МБ
+                try:
+                    if getattr(sys, "frozen", False):
+                        base_dir = Path(sys.executable).resolve().parent
+                    else:
+                        base_dir = Path(__file__).resolve().parents[1]
+
+                    log_dir = base_dir / "logs"
+                    log_dir.mkdir(parents=True, exist_ok=True)
+                    transcript_path = log_dir / "transcripts.log"
+
+                    max_size_bytes = 3 * 1024 * 1024
+                    if transcript_path.exists() and transcript_path.stat().st_size >= max_size_bytes:
+                        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        rotated = log_dir / f"transcripts_{ts}.log"
+                        transcript_path.rename(rotated)
+
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    backend_str = used_backend or (self.settings.recognition.backend or "unknown")
+
+                    with transcript_path.open("a", encoding="utf-8") as f:
+                        f.write(
+                            f"[{timestamp}] backend={backend_str} "
+                            f"duration={audio_duration_sec:.3f}s\n"
+                            f"RAW: {(raw_text or '').strip()}\n"
+                            f"PROCESSED: {(processed_text or '').strip()}\n"
+                            "----------------------------------------\n"
+                        )
+                except Exception as exc:  # noqa: BLE001
+                    _logger.exception("Failed to append transcript log: {}", exc)
+
+                self.state_changed.emit("ready")
             except Exception as exc:  # noqa: BLE001
-                _logger.exception("Failed to append transcript log: {}", exc)
+                _logger.exception("Unexpected error during post-processing: {}", exc)
+                self.state_changed.emit("error")
+                self.message_shown.emit("Неизвестная ошибка постобработки. См. логи.", 3000)
+        finally:
+            self._processing_lock.release()
 
-            self.state_changed.emit("ready")
-        except Exception as exc:  # noqa: BLE001
-            _logger.exception("Unexpected error during post-processing: {}", exc)
-            self.state_changed.emit("error")
-            self.message_shown.emit("Неизвестная ошибка постобработки. См. логи.", 3000)
+    def _log_idea(self, text: str):
+        """Appends an idea to the ideas.log file."""
+        from loguru import logger
+        from datetime import datetime
+        
+        if not text.strip():
+            return
+            
+        try:
+            # Use the same base_dir logic as in _process_audio
+            if getattr(sys, "frozen", False):
+                base_dir = Path(sys.executable).resolve().parent
+            else:
+                base_dir = Path(__file__).resolve().parents[1]
+
+            log_dir = base_dir / "logs"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            idea_log_path = log_dir / "ideas.log"
+            
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            with idea_log_path.open("a", encoding="utf-8") as f:
+                f.write(f"[{timestamp}] {text.strip()}\n")
+                
+        except Exception as exc:
+            logger.exception("Failed to append idea to log: {}", exc)
 
     # -------------------------------------------------------------- Debug
 
@@ -446,6 +518,7 @@ class App(QObject):
                 },
                 "hotkeys": {
                     "record": "ctrl+win",
+                    "record_idea": "ctrl+win+alt",
                     "cancel": "esc",
                     "toggle_window": "ctrl+alt+s",
                     "toggle_debug": "ctrl+alt+d",

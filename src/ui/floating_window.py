@@ -16,10 +16,98 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QFormLayout,
     QCheckBox,
+    QScrollArea,
+    QFrame,
 )
 
 from config.settings import UIConfig
 from ui.animated_icons import RecordingIcon, ProcessingIcon, ReadyIcon
+
+
+class IdeaItemWidget(QWidget):
+    """
+    Виджет для одной идеи в списке.
+    Поддерживает зачеркивание по клику и удаление через 5 секунд.
+    """
+    
+    def __init__(self, text: str, parent=None):
+        super().__init__(parent)
+        self.text = text
+        self._is_done = False
+        self._delete_timer = QTimer()
+        self._delete_timer.setSingleShot(True)
+        self._delete_timer.timeout.connect(self._perform_delete)
+        
+        self._init_ui()
+        
+    def _init_ui(self):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(5)
+        
+        # Применяем стиль, аналогичный textBlock
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet("""
+            IdeaItemWidget {
+                background-color: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                border-radius: 8px;
+            }
+        """)
+        
+        self.label = QLabel(self.text)
+        self.label.setWordWrap(True)
+        self.label.setStyleSheet("color: white; font-size: 10pt; background: transparent; border: none;")
+        
+        layout.addWidget(self.label)
+        
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._toggle_done()
+            
+    def _toggle_done(self):
+        self._is_done = not self._is_done
+        
+        if self._is_done:
+            # Зачеркиваем
+            font = self.label.font()
+            font.setStrikeOut(True)
+            self.label.setFont(font)
+            # Меняем стиль всего виджета, чтобы было видно, что он "выполнен"
+            self.setStyleSheet("""
+                IdeaItemWidget {
+                    background-color: rgba(0, 0, 0, 0.2);
+                    border: 1px solid rgba(255, 255, 255, 0.05);
+                    border-radius: 8px;
+                }
+            """)
+            self.label.setStyleSheet("color: rgba(255, 255, 255, 0.4); font-size: 10pt; background: transparent; border: none;")
+            
+            # Запускаем таймер удаления
+            self._delete_timer.start(5000)
+        else:
+            # Убираем зачеркивание
+            font = self.label.font()
+            font.setStrikeOut(False)
+            self.label.setFont(font)
+            # Возвращаем обычный стиль
+            self.setStyleSheet("""
+                IdeaItemWidget {
+                    background-color: rgba(255, 255, 255, 0.08);
+                    border: 1px solid rgba(255, 255, 255, 0.15);
+                    border-radius: 8px;
+                }
+            """)
+            self.label.setStyleSheet("color: white; font-size: 10pt; background: transparent; border: none;")
+            
+            # Останавливаем таймер
+            self._delete_timer.stop()
+            
+    def _perform_delete(self):
+        # Удаляем виджет из родительского layout и уничтожаем
+        if self.parent():
+            self.setParent(None)
+            self.deleteLater()
 
 
 class ClickableLabel(QLabel):
@@ -51,6 +139,7 @@ class FloatingWindow(QWidget):
     exit_requested = pyqtSignal()
     toggle_compact_requested = pyqtSignal()
     settings_save_requested = pyqtSignal()
+    retry_requested = pyqtSignal()
 
     def __init__(self, ui_config: UIConfig) -> None:
         super().__init__()
@@ -109,8 +198,13 @@ class FloatingWindow(QWidget):
 
         normal_layout.addLayout(top_layout)
         normal_layout.addWidget(status_container, alignment=Qt.AlignmentFlag.AlignCenter)
+        normal_layout.addWidget(self.retry_button, alignment=Qt.AlignmentFlag.AlignCenter)
         normal_layout.addWidget(self.raw_label)
         normal_layout.addWidget(self.processed_label)
+        
+        # Добавляем список идей в layout
+        normal_layout.addWidget(self.ideas_scroll)
+        normal_layout.addWidget(self.clear_ideas_button, alignment=Qt.AlignmentFlag.AlignRight)
 
         # --- Страница для компактного режима ---
         self.compact_page = QWidget()
@@ -158,6 +252,11 @@ class FloatingWindow(QWidget):
         self.compact_button_compact.setFixedSize(24, 24)
         self.compact_button_compact.clicked.connect(self._on_compact_clicked)
         self.compact_button_compact.setStyleSheet("font-weight: bold; font-size: 14pt;")
+
+        self.retry_button = QPushButton("Попробуйте еще раз")
+        self.retry_button.clicked.connect(self._on_retry_clicked)
+        self.retry_button.setObjectName("retryButton")
+        self.retry_button.hide()
 
         # --- Иконки состояний ---
         self.icons_stack = QStackedLayout()
@@ -215,6 +314,59 @@ class FloatingWindow(QWidget):
         self.processed_label.clicked.connect(lambda: self._copy_text(self.processed_label.text()))
         self.result_label = self.processed_label
 
+        # --- Список идей ---
+        self.ideas_container = QWidget()
+        self.ideas_layout = QVBoxLayout(self.ideas_container)
+        self.ideas_layout.setContentsMargins(0, 0, 0, 0)
+        self.ideas_layout.setSpacing(4)
+        self.ideas_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        self.ideas_scroll = QScrollArea()
+        self.ideas_scroll.setWidgetResizable(True)
+        self.ideas_scroll.setWidget(self.ideas_container)
+        self.ideas_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.ideas_scroll.setStyleSheet("""
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QWidget#ideas_container {
+                background: transparent;
+            }
+            QScrollBar:vertical {
+                width: 4px;
+                background: rgba(0,0,0,0.1);
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(255,255,255,0.3);
+                border-radius: 2px;
+            }
+        """)
+        # Важно: делаем фон контейнера прозрачным
+        self.ideas_container.setObjectName("ideas_container")
+        self.ideas_container.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.ideas_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        # Скрываем по умолчанию, пока нет идей
+        self.ideas_scroll.hide()
+        self.ideas_scroll.setMaximumHeight(150) # Ограничиваем высоту списка
+
+        self.clear_ideas_button = QPushButton("Очистить список")
+        self.clear_ideas_button.setStyleSheet("""
+            QPushButton {
+                color: rgba(255, 255, 255, 0.6);
+                font-size: 9pt;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 4px;
+                padding: 2px 6px;
+            }
+            QPushButton:hover {
+                color: white;
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+        """)
+        self.clear_ideas_button.clicked.connect(self._clear_all_ideas)
+        self.clear_ideas_button.hide()
+
         self.status_text_label = QLabel("")
         self.status_text_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.status_text_label.setStyleSheet("color: rgba(255, 255, 255, 0.9); font-size: 11pt; font-weight: bold;")
@@ -249,6 +401,18 @@ class FloatingWindow(QWidget):
             QPushButton:hover {
                 color: #00bcd4;
             }
+           QPushButton#retryButton {
+               background-color: #007bff;
+               color: white;
+               border: none;
+               border-radius: 5px;
+               padding: 8px 12px;
+               font-size: 10pt;
+               font-weight: bold;
+           }
+           QPushButton#retryButton:hover {
+               background-color: #0056b3;
+           }
             """
         )
 
@@ -293,6 +457,9 @@ class FloatingWindow(QWidget):
 
         if state == "ready":
             QTimer.singleShot(1000, lambda: self.set_state("idle"))
+        
+        if state != "error":
+            self.hide_retry_button()
 
         # управляем отображением текстовых блоков
         self._text_blocks_enabled = state not in {"recording"}
@@ -347,6 +514,14 @@ class FloatingWindow(QWidget):
         self.status_text_label.setText("Скопировано в буфер обмена")
         QTimer.singleShot(1200, lambda: self.set_state(self._state))
 
+    def show_retry_button(self) -> None:
+        """Показывает кнопку повторной попытки."""
+        self.retry_button.show()
+
+    def hide_retry_button(self) -> None:
+        """Скрывает кнопку повторной попытки."""
+        self.retry_button.hide()
+
     # ------------------------------------------------------------------ text setters
 
     def set_raw_text(self, text: str) -> None:
@@ -356,6 +531,36 @@ class FloatingWindow(QWidget):
     def set_processed_text(self, text: str) -> None:
         """Показать текст после постпроцессинга (нижний блок)."""
         self.processed_label.setText(text or "")
+
+    def add_idea(self, text: str) -> None:
+        """Добавить новую идею в список."""
+        if not text.strip():
+            return
+            
+        item = IdeaItemWidget(text)
+        # Добавляем в начало списка (insertWidget(0, ...)) или в конец (addWidget)
+        # Пользователь просил "каждая новая добавляется в список". Обычно новые снизу, но для заметок часто удобно сверху.
+        # Сделаем добавление вниз, как в чатах.
+        self.ideas_layout.addWidget(item)
+        
+        self.ideas_scroll.show()
+        self.clear_ideas_button.show()
+        
+        # Прокручиваем вниз
+        QTimer.singleShot(100, lambda: self.ideas_scroll.verticalScrollBar().setValue(
+            self.ideas_scroll.verticalScrollBar().maximum()
+        ))
+
+    def _clear_all_ideas(self) -> None:
+        """Очистить весь список идей."""
+        while self.ideas_layout.count():
+            item = self.ideas_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+        
+        self.ideas_scroll.hide()
+        self.clear_ideas_button.hide()
 
     # ------------------------------------------------------------------ events
 
@@ -375,6 +580,11 @@ class FloatingWindow(QWidget):
     def _on_close_clicked(self) -> None:
         # Кнопка закрытия: сигнал наверх (App решает — выйти или скрыть окно)
         self.exit_requested.emit()
+
+    def _on_retry_clicked(self) -> None:
+        """Клик по кнопке "Попробуйте еще раз"."""
+        self.hide_retry_button()
+        self.retry_requested.emit()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:

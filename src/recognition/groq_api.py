@@ -63,15 +63,17 @@ class GroqWhisperRecognizer:
                     headers=headers,
                     files=files,
                     data=data,
-                    timeout=60,
+                    timeout=10,
                 )
                 # Если дошли до сюда — HTTP-запрос выполнен, выходим из цикла
                 break
             except requests.Timeout as exc:  # type: ignore[attr-defined]
-                logger.exception("Groq request timeout (attempt {}): {}", attempt, exc)
+                # Логируем кратко без полного traceback, чтобы не засорять консоль.
+                logger.error("Groq request timeout (attempt {}): {}", attempt, exc)
                 last_exc = exc
             except requests.RequestException as exc:  # type: ignore[attr-defined]
-                logger.exception("Groq network error (attempt {}): {}", attempt, exc)
+                # Любая другая сетевая ошибка Groq — тоже без гигантского stacktrace.
+                logger.error("Groq network error (attempt {}): {}", attempt, exc)
                 last_exc = exc
 
             if attempt == 1:
