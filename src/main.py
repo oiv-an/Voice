@@ -16,6 +16,8 @@ from clipboard.clipboard_manager import ClipboardManager
 from recognition import create_recognizer
 from recognition.postprocessor import TextPostprocessor
 from utils.logger import setup_logging
+from utils.recovery import RecoveryManager
+from utils.audio_processing import speed_up_audio
 
 
 class App(QObject):
@@ -52,6 +54,9 @@ class App(QObject):
         self.settings = self._load_or_init_settings()
         setup_logging(self.settings.logging)
         
+        # Recovery manager
+        self.recovery_manager = RecoveryManager(self.base_dir)
+
         # Core components
         self.window = FloatingWindow(self.settings.ui)
         self.tray = SystemTrayIcon(self.window, self.settings.app)
@@ -138,6 +143,9 @@ class App(QObject):
         self.message_shown.connect(self.window.show_message)
         self.text_updated.connect(self._on_text_updated)
         self.idea_added.connect(self.window.add_idea)
+
+        # Check for recovery files on startup
+        self._check_recovery_files()
 
     # --------------------------------------------------------------------- UI
 
@@ -242,7 +250,7 @@ class App(QObject):
         if self._last_audio_data:
             logger.info("Retrying processing for the last audio data.")
             # Запускаем в новом потоке, чтобы не блокировать UI
-            thread = threading.Thread(target=self._process_audio, args=(self._last_audio_data,))
+            thread = threading.Thread(target=self._process_audio, args=(self._last_audio_data, None))
             thread.start()
         else:
             logger.warning("Retry requested, but no audio data is available.")
@@ -259,8 +267,19 @@ class App(QObject):
         self.window.set_state("recording")
 
         def on_finished(audio_data):
+            # Speed up audio x2 before processing/saving
+            # This reduces duration and file size, but increases pitch.
+            processed_audio = speed_up_audio(audio_data, factor=2.0)
+
+            # Save audio to disk for recovery
+            try:
+                recovery_path = self.recovery_manager.save_audio(processed_audio)
+            except Exception:
+                # If saving fails, we still try to process in-memory
+                recovery_path = None
+
             # The final `is_idea` flag is checked inside _process_audio
-            thread = threading.Thread(target=self._process_audio, args=(audio_data,))
+            thread = threading.Thread(target=self._process_audio, args=(processed_audio, recovery_path))
             thread.start()
 
         self.audio_recorder.start(on_finished=on_finished)
@@ -313,7 +332,7 @@ class App(QObject):
     
     # ----------------------------------------------------------- Processing
     
-    def _process_audio(self, audio_data) -> None:
+    def _process_audio(self, audio_data, recovery_path: Optional[Path] = None) -> None:
         """
         Синхронная обработка аудио.
         Флаг self._is_idea определяет, нужно ли добавлять результат в список идей.
@@ -455,6 +474,11 @@ class App(QObject):
                     _logger.exception("Failed to append transcript log: {}", exc)
 
                 self.state_changed.emit("ready")
+
+                # If successful, delete recovery file
+                if recovery_path:
+                    self.recovery_manager.cleanup(recovery_path)
+
             except Exception as exc:  # noqa: BLE001
                 _logger.exception("Unexpected error during post-processing: {}", exc)
                 self.state_changed.emit("error")
@@ -488,6 +512,48 @@ class App(QObject):
                 
         except Exception as exc:
             logger.exception("Failed to append idea to log: {}", exc)
+
+    def _check_recovery_files(self) -> None:
+        """
+        Checks for existing recovery files and processes them.
+        """
+        from loguru import logger
+        
+        files = self.recovery_manager.get_recovery_files()
+        if not files:
+            return
+
+        logger.info(f"Found {len(files)} recovery files. Processing...")
+        
+        # Process files in a separate thread to not block UI startup
+        def process_recovery():
+            for filepath in files:
+                logger.info(f"Recovering file: {filepath}")
+                audio_data = self.recovery_manager.load_audio(filepath)
+                if audio_data:
+                    # We process it as a normal recording.
+                    # Note: this will trigger UI updates and clipboard paste.
+                    # We pass the filepath so it gets deleted on success.
+                    
+                    # Acquire lock manually since we are calling _process_audio which also tries to acquire it.
+                    # Actually _process_audio acquires it. We just need to call it.
+                    # But we need to wait for it to finish before next one?
+                    # _process_audio is synchronous (it runs in the thread we call it in).
+                    # So we can just call it.
+                    
+                    # However, _process_audio expects to be run in a thread (it blocks).
+                    # Since we are already in a thread (process_recovery), it's fine.
+                    
+                    # One caveat: _process_audio emits signals.
+                    
+                    self._process_audio(audio_data, recovery_path=filepath)
+                    
+                    # Small delay between files
+                    time.sleep(1)
+                else:
+                    logger.error(f"Failed to load audio from {filepath}, skipping.")
+
+        threading.Thread(target=process_recovery, daemon=True).start()
 
     # -------------------------------------------------------------- Debug
 
