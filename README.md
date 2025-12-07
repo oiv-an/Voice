@@ -4,6 +4,19 @@ VoiceCapture — это мощная десктоп-утилита для Window
 
 ---
 
+## 🚀 Что нового в версии 2.0.0 (Lite)
+
+### 🪶 VoiceCapture 2.0 Lite
+Мы выпустили специальную облегченную версию приложения!
+- **Полностью портативная:** Работает из одного EXE-файла, не требует установки.
+- **Ультра-легкая:** Удалены все тяжелые библиотеки для локального распознавания (PyTorch, Transformers).
+- **Только облако:** Работает через быстрые API Groq и OpenAI.
+- **Исходный код:** Доступен в папке `voice2.0/` этого репозитория.
+
+[Скачать VoiceCapture 2.0 Lite](https://github.com/oiv-an/Voice/releases)
+
+---
+
 ## 🚀 Что нового в версии 1.1.0
 
 ### ✨ Список идей (Idea List)
@@ -158,6 +171,19 @@ postprocess:
 # VoiceCapture (EN)
 
 VoiceCapture is a powerful desktop utility for Windows designed for quick voice input and idea management. It allows you to record your voice using global hotkeys, recognize speech with advanced models (Groq, OpenAI, GigaAM), and automatically paste the text into any application.
+
+---
+
+## 🚀 What's New in Version 2.0.0 (Lite)
+
+### 🪶 VoiceCapture 2.0 Lite
+We have released a special lightweight version of the app!
+- **Fully Portable:** Runs from a single EXE file, no installation required.
+- **Ultra-lightweight:** All heavy local recognition libraries (PyTorch, Transformers) have been removed.
+- **Cloud Only:** Works via fast Groq and OpenAI APIs.
+- **Source Code:** Available in the `voice2.0/` folder of this repository.
+
+[Download VoiceCapture 2.0 Lite](https://github.com/oiv-an/Voice/releases)
 
 ---
 
