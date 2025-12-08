@@ -38,6 +38,7 @@ class AudioConfig:
     max_duration: int = 60
     vad_threshold: float = 0.5
     vad_min_duration: float = 0.1
+    speedup_x2: bool = False
 
 
 @dataclass

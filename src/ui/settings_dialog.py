@@ -98,6 +98,16 @@ class SettingsDialog(QDialog):
             """
         )
 
+        # === Блок: Аудио =======================================================
+        audio_group = QGroupBox("Аудио")
+        audio_form = QFormLayout(audio_group)
+
+        self.speedup_checkbox = QCheckBox("Ускорение x2 (экспериментально)")
+        self.speedup_checkbox.setToolTip("Ускоряет аудио в 2 раза перед отправкой. Экономит трафик, но повышает тон голоса.")
+        audio_form.addRow(self.speedup_checkbox)
+
+        layout.addWidget(audio_group)
+
         # === Блок: сервис распознавания (backend + ключи) ======================
         backend_group = QGroupBox("Сервис распознавания")
         backend_form = QFormLayout(backend_group)
@@ -203,6 +213,9 @@ class SettingsDialog(QDialog):
         self.openai_api_key_edit.setText(rec.openai.api_key)
         self.openai_base_url_edit.setText(rec.openai.base_url)
 
+        # Audio
+        self.speedup_checkbox.setChecked(settings.audio.speedup_x2)
+
         # Hotkeys
         self.record_hotkey_edit.setText(settings.hotkeys.record)
         self.record_idea_hotkey_edit.setText(settings.hotkeys.record_idea)
@@ -248,6 +261,11 @@ class SettingsDialog(QDialog):
 
         groq_llm_model = self.groq_llm_model_edit.text().strip()
         openai_llm_model = self.openai_llm_model_edit.text().strip()
+
+        new_audio = replace(
+            old.audio,
+            speedup_x2=self.speedup_checkbox.isChecked(),
+        )
 
         new_hotkeys = replace(
             old.hotkeys,
@@ -307,6 +325,7 @@ class SettingsDialog(QDialog):
         return replace(
             old,
             hotkeys=new_hotkeys,
+            audio=new_audio,
             recognition=new_recognition,
             postprocess=new_postprocess,
         )

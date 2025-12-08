@@ -267,9 +267,11 @@ class App(QObject):
         self.window.set_state("recording")
 
         def on_finished(audio_data):
-            # Speed up audio x2 before processing/saving
-            # This reduces duration and file size, but increases pitch.
-            processed_audio = speed_up_audio(audio_data, factor=2.0)
+            # Speed up audio x2 if enabled in settings
+            if self.settings.audio.speedup_x2:
+                processed_audio = speed_up_audio(audio_data, factor=2.0)
+            else:
+                processed_audio = audio_data
 
             # Save audio to disk for recovery
             try:
