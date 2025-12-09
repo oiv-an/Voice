@@ -68,11 +68,16 @@ class AudioRecorder:
             frames.append(indata.copy())
 
         try:
+            device = self._config.device
+            if device == "default":
+                device = None
+
             with sd.InputStream(
                 samplerate=sample_rate,
                 channels=channels,
                 dtype="float32",
                 callback=callback,
+                device=device,
             ):
                 while not self._stop_event.is_set():
                     if time.time() - start_time >= max_duration:

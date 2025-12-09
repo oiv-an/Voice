@@ -157,6 +157,10 @@ postprocess:
 
 ## 📝 История изменений (Changelog)
 
+### [1.3.0] - 2025-12-09
+#### Добавлено
+- Возможность выбора аудиоустройства (микрофона) в настройках.
+
 ### [1.2.0] - 2025-12-07
 #### Добавлено
 - Система восстановления записей при сбоях (Crash Recovery).
@@ -230,6 +234,10 @@ Your recordings are now safe!
 ### ⚡ Audio Speedup (x2)
 - **Optimization:** Audio is automatically sped up by 2x before being sent to the neural network.
 - **Efficiency:** This reduces data size and speeds up recognition.
+
+### 🎤 Microphone Selection
+- **Settings:** You can now select a specific input device (microphone) in the app settings.
+- **Convenience:** Useful if you have multiple microphones or want to use a non-default system device.
 
 ### ✨ Idea List
 Never lose a thought while you're working!
@@ -347,6 +355,10 @@ postprocess:
 ---
 
 ## 📝 Changelog
+
+### [1.3.0] - 2025-12-09
+#### Added
+- Ability to select audio input device (microphone) in settings.
 
 ### [1.2.0] - 2025-12-07
 #### Added

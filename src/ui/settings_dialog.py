@@ -16,6 +16,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+import sounddevice as sd
+
 from config.settings import AppSettings, RecognitionConfig, HotkeysConfig
 
 
@@ -101,6 +103,10 @@ class SettingsDialog(QDialog):
         # === Блок: Аудио =======================================================
         audio_group = QGroupBox("Аудио")
         audio_form = QFormLayout(audio_group)
+
+        self.device_combo = QComboBox()
+        self._populate_devices()
+        audio_form.addRow("Микрофон:", self.device_combo)
 
         self.speedup_checkbox = QCheckBox("Ускорение x2 (экспериментально)")
         self.speedup_checkbox.setToolTip("Ускоряет аудио в 2 раза перед отправкой. Экономит трафик, но повышает тон голоса.")
@@ -195,6 +201,18 @@ class SettingsDialog(QDialog):
         self.setMinimumWidth(600)
         self.setMinimumHeight(400)
 
+    def _populate_devices(self) -> None:
+        self.device_combo.clear()
+        self.device_combo.addItem("По умолчанию", userData="default")
+
+        try:
+            devices = sd.query_devices()
+            for i, device in enumerate(devices):
+                if device["max_input_channels"] > 0:
+                    self.device_combo.addItem(f"{device['name']}", userData=i)
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------ load/save
 
     def _load_from_settings(self, settings: AppSettings) -> None:
@@ -214,6 +232,13 @@ class SettingsDialog(QDialog):
         self.openai_base_url_edit.setText(rec.openai.base_url)
 
         # Audio
+        device_val = settings.audio.device
+        idx = self.device_combo.findData(device_val)
+        if idx != -1:
+            self.device_combo.setCurrentIndex(idx)
+        else:
+            self.device_combo.setCurrentIndex(0)
+
         self.speedup_checkbox.setChecked(settings.audio.speedup_x2)
 
         # Hotkeys
@@ -264,6 +289,7 @@ class SettingsDialog(QDialog):
 
         new_audio = replace(
             old.audio,
+            device=self.device_combo.currentData(),
             speedup_x2=self.speedup_checkbox.isChecked(),
         )
 
