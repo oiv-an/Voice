@@ -1,0 +1,74 @@
+# -----------------------------------------------------------------------------
+# Python
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.so
+*.dll
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Build / dist
+build/
+dist/
+*.spec
+
+# Logs
+*.log
+logs/
+
+# Byte-compiled / optimized / DLL files
+*.pyc
+*.pyo
+*.pyd
+
+# -----------------------------------------------------------------------------
+# OS / Editors
+# -----------------------------------------------------------------------------
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# VSCode
+.vscode/
+.history/
+
+# JetBrains
+.idea/
+
+# -----------------------------------------------------------------------------
+# Secrets & local config
+# -----------------------------------------------------------------------------
+# Environment files
+.env
+.env.*
+*.env
+
+# Local config with secrets (API keys, tokens, etc.)
+config.yaml
+src/config/config.yaml
+config.local.yaml
+config.local.yml
+config.local.json
+*.local.yaml
+*.local.yml
+*.local.json
+
+# Do NOT commit real keys in default config:
+# - keep src/config/config.yaml generic (no real keys)
+# - use local overrides (config.local.yaml) which are ignored by git
+
+# Cache / models (if later added)
+.cache/
+models/
+.lh/
