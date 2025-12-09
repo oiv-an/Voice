@@ -5,7 +5,6 @@ from typing import Protocol
 from audio.recorder import AudioData
 from config.settings import RecognitionConfig
 from recognition.groq_api import GroqWhisperRecognizer
-from recognition.gigaam_local import GigaAMRecognizer
 from recognition.openai_api import OpenAIWhisperRecognizer
 
 
@@ -18,17 +17,11 @@ def create_recognizer(config: RecognitionConfig) -> IRecognizer:
     """
     Factory for recognizers.
 
-    Поддерживаем три backend'а:
+    Поддерживаем два backend'а:
       - "groq"   — облачный Groq Whisper
       - "openai" — облачный OpenAI Whisper
-      - "local"  — локальный GigaAM-v3 e2e_rnnt через HuggingFace
     """
     backend = (config.backend or "groq").lower()
-
-    if backend == "local":
-        # Локальный GigaAM-v3 e2e_rnnt через HuggingFace
-        # Текущая реализация GigaAMRecognizer не принимает аргументов конструктора.
-        return GigaAMRecognizer()
 
     if backend == "groq":
         return GroqWhisperRecognizer(config.groq)

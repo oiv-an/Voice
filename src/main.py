@@ -33,7 +33,7 @@ class App(QObject):
     MVP workflow:
         global hotkey (record) down   -> start_recording()
         global hotkey (record) up     -> stop_recording()
-        audio -> recognizer (Groq/GigaAM) -> postprocess -> clipboard.copy + paste
+        audio -> recognizer (Groq/OpenAI) -> postprocess -> clipboard.copy + paste
     """
 
     def __init__(self) -> None:
@@ -64,7 +64,7 @@ class App(QObject):
         self.audio_recorder = AudioRecorder(self.settings.audio)
         # Основной распознаватель для текущего backend'а
         self.recognizer = create_recognizer(self.settings.recognition)
-        # Кэш распознавателей по backend'ам, чтобы не пересоздавать GigaAM на каждое распознавание
+        # Кэш распознавателей по backend'ам
         self._recognizers = {}
         primary_backend = (self.settings.recognition.backend or "groq").lower()
         self._recognizers[primary_backend] = self.recognizer
@@ -370,7 +370,7 @@ class App(QObject):
 
             # ------------------------ каскад backend'ов с ретраями ----------------
             primary = (self.settings.recognition.backend or "groq").lower()
-            all_backends = ["groq", "openai", "local"]
+            all_backends = ["groq", "openai"]
             cascade = [b for b in [primary] + all_backends if b in all_backends]
             seen = set()
             ordered_backends = [b for b in cascade if not (b in seen or seen.add(b))]
@@ -537,17 +537,6 @@ class App(QObject):
                     # Note: this will trigger UI updates and clipboard paste.
                     # We pass the filepath so it gets deleted on success.
                     
-                    # Acquire lock manually since we are calling _process_audio which also tries to acquire it.
-                    # Actually _process_audio acquires it. We just need to call it.
-                    # But we need to wait for it to finish before next one?
-                    # _process_audio is synchronous (it runs in the thread we call it in).
-                    # So we can just call it.
-                    
-                    # However, _process_audio expects to be run in a thread (it blocks).
-                    # Since we are already in a thread (process_recovery), it's fine.
-                    
-                    # One caveat: _process_audio emits signals.
-                    
                     self._process_audio(audio_data, recovery_path=filepath)
                     
                     # Small delay between files
@@ -582,7 +571,7 @@ class App(QObject):
             default_config = {
                 "app": {
                     "name": "VoiceCapture",
-                    "version": "0.1.0",
+                    "version": "2.0.0",
                 },
                 "hotkeys": {
                     "record": "ctrl+win",
@@ -597,16 +586,7 @@ class App(QObject):
                     "max_duration": 120,
                 },
                 "recognition": {
-                    "backend": "local",
-                    "local": {
-                        "model": "large-v3",
-                        "device": "cuda",
-                        "compute_type": "float16",
-                        "language": "ru",
-                        "beam_size": 5,
-                        "temperature": 0.0,
-                        "hf_token": "",
-                    },
+                    "backend": "groq",
                     "openai": {
                         "api_key": "",
                         "model": "whisper-1",
@@ -665,7 +645,7 @@ class App(QObject):
 
         # Гарантируем, что backend задан
         if not getattr(settings.recognition, "backend", None):
-            settings.recognition.backend = "local"
+            settings.recognition.backend = "groq"
 
         return settings
 

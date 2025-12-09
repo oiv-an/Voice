@@ -15,7 +15,7 @@ import yaml
 @dataclass
 class AppInfoConfig:
     name: str = "VoiceCapture"
-    version: str = "1.3.0"
+    version: str = "2.0.1"
     language: str = "ru"
     debug: bool = False
 
@@ -42,16 +42,6 @@ class AudioConfig:
 
 
 @dataclass
-class LocalRecognitionConfig:
-    model: str = "large-v3"
-    device: str = "cuda"
-    compute_type: str = "float16"
-    language: str = "ru"
-    beam_size: int = 5
-    temperature: float = 0.0
-
-
-@dataclass
 class OpenAIRecognitionConfig:
     api_key: str = "sk-..."
     model: str = "whisper-1"
@@ -70,12 +60,9 @@ class GroqRecognitionConfig:
     language: str = "ru"
 
 
-from dataclasses import dataclass, field
-...
 @dataclass
 class RecognitionConfig:
-    backend: str = "local"  # local, openai, groq
-    local: LocalRecognitionConfig = field(default_factory=LocalRecognitionConfig)
+    backend: str = "groq"  # openai, groq
     openai: OpenAIRecognitionConfig = field(default_factory=OpenAIRecognitionConfig)
     groq: GroqRecognitionConfig = field(default_factory=GroqRecognitionConfig)
 
@@ -164,7 +151,6 @@ class AppSettings:
                 "audio": AudioConfig().__dict__,
                 "recognition": {
                     "backend": RecognitionConfig().backend,
-                    "local": LocalRecognitionConfig().__dict__,
                     "openai": OpenAIRecognitionConfig().__dict__,
                     "groq": GroqRecognitionConfig().__dict__,
                 },
@@ -211,19 +197,11 @@ class AppSettings:
         audio_cfg = AudioConfig(**get_section("audio", AudioConfig().__dict__))
 
         rec_raw = raw.get("recognition", {}) or {}
-        local_raw_rec = rec_raw.get("local", {}) or {}
         openai_raw_rec = rec_raw.get("openai", {}) or {}
         groq_raw_rec = rec_raw.get("groq", {}) or {}
 
-        # Удаляем устаревшее поле hf_token из локального блока, если оно есть в старом config.yaml
-        if "hf_token" in local_raw_rec:
-            local_raw_rec.pop("hf_token", None)
-
         recognition_cfg = RecognitionConfig(
-            backend=rec_raw.get("backend", "local"),
-            local=LocalRecognitionConfig(
-                **{**LocalRecognitionConfig().__dict__, **local_raw_rec}
-            ),
+            backend=rec_raw.get("backend", "groq"),
             openai=OpenAIRecognitionConfig(
                 **{**OpenAIRecognitionConfig().__dict__, **openai_raw_rec}
             ),
@@ -304,7 +282,6 @@ class AppSettings:
             "audio": settings.audio.__dict__,
             "recognition": {
                 "backend": settings.recognition.backend,
-                "local": settings.recognition.local.__dict__,
                 "openai": settings.recognition.openai.__dict__,
                 "groq": settings.recognition.groq.__dict__,
             },

@@ -121,7 +121,6 @@ class SettingsDialog(QDialog):
         self.backend_combo = QComboBox()
         self.backend_combo.addItem("Groq", userData="groq")
         self.backend_combo.addItem("OpenAI", userData="openai")
-        self.backend_combo.addItem("GigaAM-v3 (local)", userData="local")
         # выбор сервиса распознавания ничего не скрывает, сигнал больше не нужен
         backend_form.addRow("Сервис распознавания:", self.backend_combo)
 
@@ -159,12 +158,6 @@ class SettingsDialog(QDialog):
 
         self.openai_asr_model_edit = QLineEdit()
         asr_form.addRow("OpenAI ASR model:", self.openai_asr_model_edit)
-
-        # Локальный GigaAM-v3 использует фиксированную модель из кода
-        # (ai-sage/GigaAM-v3, revision="e2e_rnnt"), поэтому отдельного выбора
-        # модели в настройках нет и поле не отображается.
-        # self.gigaam_model_edit = QLineEdit()
-        # asr_form.addRow("GigaAM-v3 local model:", self.gigaam_model_edit)
 
         layout.addWidget(asr_group)
 
@@ -248,9 +241,6 @@ class SettingsDialog(QDialog):
         # ASR‑модели
         self.groq_asr_model_edit.setText(rec.groq.model)
         self.openai_asr_model_edit.setText(rec.openai.model)
-        # Для локального GigaAM-v3 модель зашита в коде (ai-sage/GigaAM-v3, e2e_rnnt),
-        # поэтому в настройках её не редактируем.
-        # self.gigaam_model_edit.setText(rec.local.model)
 
         # LLM‑модели (постпроцессинг)
         self.post_enabled_checkbox.setChecked(settings.postprocess.enabled)
@@ -306,12 +296,6 @@ class SettingsDialog(QDialog):
         #     * OpenAI: пишем в recognition.openai.model_process
         new_recognition = RecognitionConfig(
             backend=backend,
-            # Локальный GigaAM-v3: модель не настраивается через UI, используем
-            # значение из конфига/дефолта, а фактический идентификатор и ревизия
-            # заданы в [`GigaAMRecognizer`](src/recognition/gigaam_local.py:25).
-            local=replace(
-                old.recognition.local,
-            ),
             openai=replace(
                 old.recognition.openai,
                 api_key=self.openai_api_key_edit.text().strip(),
