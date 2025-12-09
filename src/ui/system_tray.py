@@ -78,8 +78,25 @@ class SystemTrayIcon(QObject):
         if not icon.isNull():
             return icon
 
-        # 3. Крайний случай.
-        return QIcon()
+        # 3. Крайний случай — генерируем программную иконку (цветной квадрат).
+        # Это гарантирует, что иконка будет видна, даже если системные не найдены.
+        return self._create_fallback_icon()
+
+    def _create_fallback_icon(self) -> QIcon:
+        """Генерирует простую программную иконку (синий круг)."""
+        from PyQt6.QtGui import QPixmap, QPainter, QColor
+        
+        pixmap = QPixmap(16, 16)
+        pixmap.fill(QColor(0, 0, 0, 0))  # Прозрачный фон
+        
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setBrush(QColor("#007bff"))  # Синий цвет
+        painter.setPen(QColor("white"))
+        painter.drawEllipse(1, 1, 14, 14)
+        painter.end()
+        
+        return QIcon(pixmap)
 
     def _init_icon(self) -> None:
         """

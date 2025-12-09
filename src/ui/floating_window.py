@@ -162,10 +162,12 @@ class FloatingWindow(QWidget):
     # ------------------------------------------------------------------ setup
 
     def _init_window_flags(self) -> None:
+        # Убираем Qt.WindowType.Tool, чтобы окно отображалось в панели задач (taskbar).
+        # Добавляем Qt.WindowType.Window, чтобы это было полноценное окно.
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.Tool
+            | Qt.WindowType.Window
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
 
@@ -417,9 +419,21 @@ class FloatingWindow(QWidget):
         )
 
     def _load_icons(self) -> None:
-        """Иконки из файлов больше не используются — всё на эмодзи."""
-        # Оставлено на будущее, если понадобится системная иконка окна.
-        return
+        """Устанавливает иконку окна, которая будет видна в панели задач."""
+        from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor
+        
+        # Генерируем программную иконку (синий круг), такую же как в трее
+        pixmap = QPixmap(32, 32)
+        pixmap.fill(QColor(0, 0, 0, 0))
+        
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setBrush(QColor("#007bff"))
+        painter.setPen(QColor("white"))
+        painter.drawEllipse(2, 2, 28, 28)
+        painter.end()
+        
+        self.setWindowIcon(QIcon(pixmap))
 
     def _apply_config(self) -> None:
         w, h = self._ui_config.window_size
