@@ -84,6 +84,11 @@ class PostprocessConfig:
     enabled: bool = True
     mode: str = "llm"  # simple, llm
     llm_backend: str = "groq"  # groq, openai
+    prompt: str = (
+        "Ты помощник по русскому языку. "
+        "Исправь опечатки, добавь пунктуацию, сделай текст грамматически верным. "
+        "Не меняй смысл. Ответь ТОЛЬКО исправленным текстом без пояснений."
+    )
     groq: GroqPostprocessConfig = field(default_factory=GroqPostprocessConfig)
     openai: OpenAIPostprocessConfig = field(default_factory=OpenAIPostprocessConfig)
 
@@ -226,6 +231,7 @@ class AppSettings:
             enabled=post_raw.get("enabled", True),
             mode=post_raw.get("mode", "llm"),
             llm_backend=post_raw.get("llm_backend", "groq"),
+            prompt=post_raw.get("prompt", PostprocessConfig.prompt),
             groq=GroqPostprocessConfig(
                 **{**GroqPostprocessConfig().__dict__, **groq_post_raw}
             ),
@@ -289,6 +295,7 @@ class AppSettings:
                 "enabled": settings.postprocess.enabled,
                 "mode": settings.postprocess.mode,
                 "llm_backend": settings.postprocess.llm_backend,
+                "prompt": settings.postprocess.prompt,
                 "groq": {"model": settings.postprocess.groq.model},
                 "openai": {
                     "model": settings.postprocess.openai.model,

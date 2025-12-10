@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QLabel,
     QLineEdit,
+    QPlainTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -98,6 +99,13 @@ class SettingsDialog(QDialog):
             QDialogButtonBox QPushButton {
                 min-width: 70px;
             }
+            QPlainTextEdit {
+                background-color: #3a3a3a;
+                color: #ffffff;
+                border: 1px solid #666666;
+                border-radius: 3px;
+                padding: 2px 4px;
+            }
             """
         )
 
@@ -180,6 +188,11 @@ class SettingsDialog(QDialog):
 
         self.openai_llm_model_edit = QLineEdit()
         post_form.addRow("OpenAI postprocess model:", self.openai_llm_model_edit)
+
+        self.prompt_edit = QPlainTextEdit()
+        self.prompt_edit.setPlaceholderText("Введите системный промпт для LLM...")
+        self.prompt_edit.setMaximumHeight(80)
+        post_form.addRow("System Prompt:", self.prompt_edit)
 
         layout.addWidget(post_group)
 
@@ -271,6 +284,8 @@ class SettingsDialog(QDialog):
         self.groq_llm_model_edit.setText(settings.recognition.groq.model_process)
         self.openai_llm_model_edit.setText(settings.recognition.openai.model_process)
 
+        self.prompt_edit.setPlainText(settings.postprocess.prompt)
+
         # раньше здесь вызывался _on_backend_changed(), который скрывал поля ключей.
         # теперь все поля всегда видимы, поэтому вызов не нужен.
         # self._on_backend_changed()
@@ -332,6 +347,7 @@ class SettingsDialog(QDialog):
                 or old.postprocess.llm_backend
                 or "groq"
             ),
+            prompt=self.prompt_edit.toPlainText().strip(),
             groq=replace(
                 old.postprocess.groq,
                 model=groq_llm_model or old.postprocess.groq.model,
