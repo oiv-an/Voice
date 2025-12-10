@@ -1,6 +1,6 @@
-# VoiceCapture 2.1
+# VoiceCapture 2.1.1
 
-VoiceCapture 2.1 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
+VoiceCapture 2.1.1 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
 
 ## Особенности
 
@@ -12,6 +12,15 @@ VoiceCapture 2.1 — это легковесная портативная ути
 *   **Постобработка:** Автоматическое улучшение текста с помощью LLM (исправление пунктуации, стиля и т.д.).
 *   **Глобальные горячие клавиши:** Удобное управление записью из любого приложения.
 *   **Буфер обмена:** Автоматическое копирование и вставка распознанного текста.
+
+## История изменений (Changelog)
+
+### v2.1.1
+*   **Настраиваемый системный промпт:** В настройки добавлено поле для редактирования системного промпта LLM. Теперь можно гибко настраивать инструкции для постобработки текста (например, задать стиль, попросить переводить текст и т.д.) без изменения кода.
+
+### v2.1.0
+*   Добавлена поддержка Groq API.
+*   Улучшен интерфейс настроек.
 
 ## Установка и запуск
 
@@ -60,9 +69,9 @@ Groq предоставляет щедрые бесплатные лимиты �
 
 ---
 
-# VoiceCapture 2.1 (English)
+# VoiceCapture 2.1.1 (English)
 
-VoiceCapture 2.1 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
+VoiceCapture 2.1.1 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
 
 ## Features
 
@@ -74,6 +83,15 @@ VoiceCapture 2.1 is a lightweight portable utility for voice typing and text pro
 *   **Post-processing:** Automatic text improvement using LLM (punctuation correction, style, etc.).
 *   **Global Hotkeys:** Convenient recording control from any application.
 *   **Clipboard:** Automatic copying and pasting of recognized text.
+
+## Changelog
+
+### v2.1.1
+*   **Configurable System Prompt:** Added a field in settings to edit the LLM system prompt. You can now flexibly configure post-processing instructions (e.g., set style, ask for translation, etc.) without changing the code.
+
+### v2.1.0
+*   Added Groq API support.
+*   Improved settings interface.
 
 ## Installation and Launch
 
