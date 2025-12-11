@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QScrollArea,
     QFrame,
+    QSizeGrip,
 )
 
 from config.settings import UIConfig
@@ -232,6 +233,21 @@ class FloatingWindow(QWidget):
         root_layout.addWidget(container)
 
         self._apply_styles()
+
+        # Добавляем уголок для изменения размера
+        self.size_grip = QSizeGrip(self)
+        self.size_grip.setFixedSize(20, 20)
+        # Скрываем в начале, пока не определится режим (хотя по дефолту normal, но лучше явно управлять)
+        
+    def resizeEvent(self, event):
+        # Позиционируем уголок в правом нижнем углу
+        if hasattr(self, "size_grip"):
+            rect = self.rect()
+            self.size_grip.move(
+                rect.right() - self.size_grip.width(),
+                rect.bottom() - self.size_grip.height()
+            )
+        super().resizeEvent(event)
 
     def _create_controls(self) -> None:
         """Создаёт все управляющие элементы, чтобы избежать дублирования."""
@@ -505,6 +521,8 @@ class FloatingWindow(QWidget):
             self._stack.setCurrentWidget(self.compact_page)
             # Задаём жёсткий размер для компактного режима, чтобы он не "прыгал".
             self.setFixedSize(220, 48)
+            if hasattr(self, "size_grip"):
+                self.size_grip.hide()
         else:
             self._stack.setCurrentWidget(self.normal_page)
             self._refresh_text_block_visibility()
@@ -514,7 +532,11 @@ class FloatingWindow(QWidget):
             self.setMinimumSize(0, 0)
             self.setMaximumSize(16777215, 16777215)
             w, h = self._ui_config.window_size
-            QTimer.singleShot(0, lambda: self.setFixedSize(w, h))
+            # Используем resize вместо setFixedSize, чтобы можно было менять размер
+            QTimer.singleShot(0, lambda: self.resize(w, h))
+            
+            if hasattr(self, "size_grip"):
+                self.size_grip.show()
 
     def show_message(self, text: str, timeout_ms: int = 2000) -> None:
         self.status_text_label.setText(text)

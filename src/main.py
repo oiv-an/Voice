@@ -452,7 +452,7 @@ class App(QObject):
                     self.idea_added.emit(processed_text or "")
                     self._log_idea(processed_text or "")
 
-                # 8) сохранить распознавание в отдельный текстовый лог с ротацией по ~3 МБ
+                # 8) сохранить распознавание в отдельный текстовый лог (новые сверху, макс 1 МБ)
                 try:
                     if getattr(sys, "frozen", False):
                         base_dir = Path(sys.executable).resolve().parent
@@ -463,25 +463,44 @@ class App(QObject):
                     log_dir.mkdir(parents=True, exist_ok=True)
                     transcript_path = log_dir / "transcripts.log"
 
-                    max_size_bytes = 3 * 1024 * 1024
-                    if transcript_path.exists() and transcript_path.stat().st_size >= max_size_bytes:
-                        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        rotated = log_dir / f"transcripts_{ts}.log"
-                        transcript_path.rename(rotated)
-
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     backend_str = used_backend or (self.settings.recognition.backend or "unknown")
+                    
+                    new_entry = (
+                        f"[{timestamp}] backend={backend_str} "
+                        f"duration={audio_duration_sec:.3f}s\n"
+                        f"RAW: {(raw_text or '').strip()}\n"
+                        f"PROCESSED: {(processed_text or '').strip()}\n"
+                        "----------------------------------------\n"
+                    )
 
-                    with transcript_path.open("a", encoding="utf-8") as f:
-                        f.write(
-                            f"[{timestamp}] backend={backend_str} "
-                            f"duration={audio_duration_sec:.3f}s\n"
-                            f"RAW: {(raw_text or '').strip()}\n"
-                            f"PROCESSED: {(processed_text or '').strip()}\n"
-                            "----------------------------------------\n"
-                        )
+                    # Читаем существующий контент
+                    existing_content = ""
+                    if transcript_path.exists():
+                        try:
+                            with transcript_path.open("r", encoding="utf-8") as f:
+                                existing_content = f.read()
+                        except Exception:
+                            pass
+
+                    # Добавляем новую запись в начало
+                    full_content = new_entry + existing_content
+
+                    # Обрезаем до 1 МБ
+                    max_size_bytes = 1024 * 1024
+                    if len(full_content) > max_size_bytes:
+                        cut_index = full_content.rfind('\n', 0, max_size_bytes)
+                        if cut_index != -1:
+                            full_content = full_content[:cut_index+1]
+                        else:
+                            full_content = full_content[:max_size_bytes]
+
+                    # Перезаписываем файл
+                    with transcript_path.open("w", encoding="utf-8") as f:
+                        f.write(full_content)
+
                 except Exception as exc:  # noqa: BLE001
-                    _logger.exception("Failed to append transcript log: {}", exc)
+                    _logger.exception("Failed to update transcript log: {}", exc)
 
                 self.state_changed.emit("ready")
 
@@ -497,7 +516,7 @@ class App(QObject):
             self._processing_lock.release()
 
     def _log_idea(self, text: str):
-        """Appends an idea to the ideas.log file."""
+        """Appends an idea to the ideas.log file (newest at top, max 1MB)."""
         from loguru import logger
         from datetime import datetime
         
@@ -516,12 +535,35 @@ class App(QObject):
             idea_log_path = log_dir / "ideas.log"
             
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            new_entry = f"[{timestamp}] {text.strip()}\n"
             
-            with idea_log_path.open("a", encoding="utf-8") as f:
-                f.write(f"[{timestamp}] {text.strip()}\n")
+            # Читаем существующий контент
+            existing_content = ""
+            if idea_log_path.exists():
+                try:
+                    with idea_log_path.open("r", encoding="utf-8") as f:
+                        existing_content = f.read()
+                except Exception:
+                    pass
+
+            # Добавляем новую запись в начало
+            full_content = new_entry + existing_content
+
+            # Обрезаем до 1 МБ
+            max_size_bytes = 1024 * 1024
+            if len(full_content) > max_size_bytes:
+                cut_index = full_content.rfind('\n', 0, max_size_bytes)
+                if cut_index != -1:
+                    full_content = full_content[:cut_index+1]
+                else:
+                    full_content = full_content[:max_size_bytes]
+
+            # Перезаписываем файл
+            with idea_log_path.open("w", encoding="utf-8") as f:
+                f.write(full_content)
                 
         except Exception as exc:
-            logger.exception("Failed to append idea to log: {}", exc)
+            logger.exception("Failed to update idea log: {}", exc)
 
     def _check_recovery_files(self) -> None:
         """

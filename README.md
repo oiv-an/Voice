@@ -1,6 +1,6 @@
-# VoiceCapture 2.1.1
+# VoiceCapture 2.1.2
 
-VoiceCapture 2.1.1 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
+VoiceCapture 2.1.2 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
 
 ## Особенности
 
@@ -14,6 +14,10 @@ VoiceCapture 2.1.1 — это легковесная портативная ут
 *   **Буфер обмена:** Автоматическое копирование и вставка распознанного текста.
 
 ## История изменений (Changelog)
+
+### v2.1.2
+*   **Изменение размера окна:** Добавлена возможность изменять размер главного окна (потяните за правый нижний угол).
+*   **Улучшенное логирование:** Логи теперь записываются в обратном порядке (новые записи сверху) и автоматически очищаются при достижении размера 1 МБ, чтобы не занимать лишнее место.
 
 ### v2.1.1
 *   **Настраиваемый системный промпт:** В настройки добавлено поле для редактирования системного промпта LLM. Теперь можно гибко настраивать инструкции для постобработки текста (например, задать стиль, попросить переводить текст и т.д.) без изменения кода.
@@ -69,9 +73,9 @@ Groq предоставляет щедрые бесплатные лимиты �
 
 ---
 
-# VoiceCapture 2.1.1 (English)
+# VoiceCapture 2.1.2 (English)
 
-VoiceCapture 2.1.1 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
+VoiceCapture 2.1.2 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
 
 ## Features
 
@@ -85,6 +89,10 @@ VoiceCapture 2.1.1 is a lightweight portable utility for voice typing and text p
 *   **Clipboard:** Automatic copying and pasting of recognized text.
 
 ## Changelog
+
+### v2.1.2
+*   **Window Resizing:** Added the ability to resize the main window (drag the bottom right corner).
+*   **Improved Logging:** Logs are now written in reverse order (newest entries at the top) and are automatically truncated when they reach 1 MB to save space.
 
 ### v2.1.1
 *   **Configurable System Prompt:** Added a field in settings to edit the LLM system prompt. You can now flexibly configure post-processing instructions (e.g., set style, ask for translation, etc.) without changing the code.
