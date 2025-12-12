@@ -27,13 +27,17 @@ class RecoveryManager:
         Saves AudioData to a WAV file in the recovery directory.
         Returns the path to the saved file.
         """
+        # Ensure directory exists (just in case)
+        self.recovery_dir.mkdir(parents=True, exist_ok=True)
+
         timestamp = int(time.time() * 1000)
         duration = len(audio.samples) / audio.sample_rate
         filename = f"rec_{timestamp}_{duration:.2f}.wav"
         filepath = self.recovery_dir / filename
 
         try:
-            sf.write(filepath, audio.samples, audio.sample_rate, format="WAV", subtype="PCM_16")
+            # Convert Path to str for compatibility with soundfile/libsndfile
+            sf.write(str(filepath), audio.samples, audio.sample_rate, format="WAV", subtype="PCM_16")
             logger.info(f"Audio saved for recovery: {filepath}")
             return filepath
         except Exception as e:

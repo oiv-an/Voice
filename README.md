@@ -1,6 +1,6 @@
-# VoiceCapture 2.1.2
+# VoiceCapture 2.1.3
 
-VoiceCapture 2.1.2 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
+VoiceCapture 2.1.3 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
 
 ## Особенности
 
@@ -14,6 +14,9 @@ VoiceCapture 2.1.2 — это легковесная портативная ут
 *   **Буфер обмена:** Автоматическое копирование и вставка распознанного текста.
 
 ## История изменений (Changelog)
+
+### v2.1.3
+*   **Исправление ошибки в Recovery:** Исправлена проблема, когда папка recovery не создавалась автоматически при первом запуске.
 
 ### v2.1.2
 *   **Изменение размера окна:** Добавлена возможность изменять размер главного окна (потяните за правый нижний угол).
@@ -73,9 +76,9 @@ Groq предоставляет щедрые бесплатные лимиты �
 
 ---
 
-# VoiceCapture 2.1.2 (English)
+# VoiceCapture 2.1.3 (English)
 
-VoiceCapture 2.1.2 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
+VoiceCapture 2.1.3 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
 
 ## Features
 
@@ -89,6 +92,9 @@ VoiceCapture 2.1.2 is a lightweight portable utility for voice typing and text p
 *   **Clipboard:** Automatic copying and pasting of recognized text.
 
 ## Changelog
+
+### v2.1.3
+*   **Recovery Bug Fix:** Fixed an issue where the recovery folder was not created automatically on first run.
 
 ### v2.1.2
 *   **Window Resizing:** Added the ability to resize the main window (drag the bottom right corner).
