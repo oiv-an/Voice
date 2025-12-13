@@ -28,6 +28,7 @@ class App(QObject):
     message_shown = pyqtSignal(str, int)
     text_updated = pyqtSignal(str, str)
     idea_added = pyqtSignal(str)
+    show_window_signal = pyqtSignal()
 
     """
     Main application class: wires UI, hotkeys, audio recorder, recognizer and clipboard.
@@ -153,6 +154,7 @@ class App(QObject):
         self.message_shown.connect(self.window.show_message)
         self.text_updated.connect(self._on_text_updated)
         self.idea_added.connect(self.window.add_idea)
+        self.show_window_signal.connect(self.show_window)
 
         # Check for recovery files on startup
         self._check_recovery_files()
@@ -185,7 +187,7 @@ class App(QObject):
         - если оно где-то "потерялось" — показывать и поднимать наверх.
         """
         # просто гарантируем, что окно показано и на переднем плане
-        self.show_window()
+        self.show_window_signal.emit()
 
     def open_settings_dialog(self) -> None:
         """
@@ -260,7 +262,8 @@ class App(QObject):
         if self._last_audio_data:
             logger.info("Retrying processing for the last audio data.")
             # Запускаем в новом потоке, чтобы не блокировать UI
-            thread = threading.Thread(target=self._process_audio, args=(self._last_audio_data, None))
+            # При ретрае считаем, что это не идея (или можно сохранить состояние, но для MVP так)
+            thread = threading.Thread(target=self._process_audio, args=(self._last_audio_data, False, None))
             thread.start()
         else:
             logger.warning("Retry requested, but no audio data is available.")
@@ -269,14 +272,21 @@ class App(QObject):
     def start_recording(self, is_idea: bool = False) -> None:
         if self._is_recording:
             return
+        
         self._is_recording = True
         self._is_idea = is_idea
         
         self._last_audio_data = None
-        self.window.hide_retry_button()
-        self.window.set_state("recording")
+        self.state_changed.emit("recording")
 
         def on_finished(audio_data):
+            # Capture final state (in case converted to idea during recording)
+            final_is_idea = self._is_idea
+            
+            # Reset state immediately so we can record again while processing
+            self._is_recording = False
+            self._is_idea = False
+
             # Speed up audio x2 if enabled in settings
             if self.settings.audio.speedup_x2:
                 processed_audio = speed_up_audio(audio_data, factor=2.0)
@@ -290,11 +300,15 @@ class App(QObject):
                 # If saving fails, we still try to process in-memory
                 recovery_path = None
 
-            # The final `is_idea` flag is checked inside _process_audio
-            thread = threading.Thread(target=self._process_audio, args=(processed_audio, recovery_path))
+            thread = threading.Thread(target=self._process_audio, args=(processed_audio, final_is_idea, recovery_path))
             thread.start()
 
-        self.audio_recorder.start(on_finished=on_finished)
+        if not self.audio_recorder.start(on_finished=on_finished):
+            # Failed to start (e.g. previous thread still stopping)
+            self._is_recording = False
+            self._is_idea = False
+            self.state_changed.emit("idle")
+            logger.warning("Failed to start recording: recorder is busy")
 
     def stop_recording(self) -> None:
         if not self._is_recording:
@@ -318,7 +332,7 @@ class App(QObject):
             self._is_recording = False
             self._is_idea = False
             self.audio_recorder.cancel()
-            self.window.set_state("idle")
+            self.state_changed.emit("idle")
 
     # ----------------------------------------------------------- Processing
 
@@ -344,26 +358,19 @@ class App(QObject):
     
     # ----------------------------------------------------------- Processing
     
-    def _process_audio(self, audio_data, recovery_path: Optional[Path] = None) -> None:
+    def _process_audio(self, audio_data, is_idea: bool, recovery_path: Optional[Path] = None) -> None:
         """
         Синхронная обработка аудио.
-        Флаг self._is_idea определяет, нужно ли добавлять результат в список идей.
         """
         from loguru import logger
         from pathlib import Path
         from datetime import datetime
         from recognition.postprocessor import TextPostprocessor as TP
 
-        if not self._processing_lock.acquire(blocking=False):
-            logger.warning("Processing is already in progress. Skipping new request.")
-            return
+        # Wait for lock (queueing requests)
+        self._processing_lock.acquire(blocking=True)
 
         try:
-            # Reset recording state immediately after starting processing
-            self._is_recording = False
-            is_idea_flag = self._is_idea
-            self._is_idea = False # Reset for the next recording
-
             self._last_audio_data = audio_data
             self.state_changed.emit("processing")
 
@@ -455,7 +462,7 @@ class App(QObject):
                 self.clipboard.paste()
 
                 # 7) если это была идея, добавить в список идей
-                if is_idea_flag:
+                if is_idea:
                     self.idea_added.emit(processed_text or "")
                     self._log_idea(processed_text or "")
 
@@ -594,7 +601,7 @@ class App(QObject):
                     # Note: this will trigger UI updates and clipboard paste.
                     # We pass the filepath so it gets deleted on success.
                     
-                    self._process_audio(audio_data, recovery_path=filepath)
+                    self._process_audio(audio_data, is_idea=False, recovery_path=filepath)
                     
                     # Small delay between files
                     time.sleep(1)
@@ -607,7 +614,7 @@ class App(QObject):
 
     def toggle_debug_mode(self) -> None:
         # Placeholder: will reconfigure logging level later
-        self.window.show_message("Toggle debug (not fully implemented yet).")
+        self.message_shown.emit("Toggle debug (not fully implemented yet).", 2000)
 
     # ----------------------------------------------------------- Settings / config helpers
 

@@ -36,14 +36,15 @@ class AudioRecorder:
 
     # ------------------------------------------------------------------ public
 
-    def start(self, on_finished: Callable[[AudioData], None]) -> None:
+    def start(self, on_finished: Callable[[AudioData], None]) -> bool:
         if self._thread and self._thread.is_alive():
-            return
+            return False
         self._on_finished = on_finished
         self._stop_event.clear()
         self._cancel_event.clear()
         self._thread = threading.Thread(target=self._record_loop, daemon=True)
         self._thread.start()
+        return True
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -86,15 +87,16 @@ class AudioRecorder:
                     time.sleep(0.05)
         except sd.PortAudioError:
             # In MVP we silently ignore and do nothing; later we can log and notify UI
-            return
+            pass
 
         if self._cancel_event.is_set():
             return
 
         if not frames:
-            return
+            data = np.array([], dtype="float32")
+        else:
+            data = np.concatenate(frames, axis=0)
 
-        data = np.concatenate(frames, axis=0)
         audio = AudioData(samples=data, sample_rate=sample_rate, channels=channels)
 
         if self._on_finished:
