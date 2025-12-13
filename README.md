@@ -1,9 +1,10 @@
-# VoiceCapture 2.1.3
+# VoiceCapture 2.2.0
 
-VoiceCapture 2.1.3 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
+VoiceCapture 2.2.0 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
 
 ## Особенности
 
+*   **История распознаваний:** Удобный просмотр последних 50 записей с возможностью копирования исходного и обработанного текста.
 *   **Портативность:** Работает из одного исполняемого файла, не требует установки.
 *   **Crash Recovery:** Автоматическое сохранение и восстановление записей при сбоях.
 *   **Ускорение x2:** Автоматическое ускорение аудио для экономии трафика и быстрого распознавания.
@@ -14,6 +15,10 @@ VoiceCapture 2.1.3 — это легковесная портативная ут
 *   **Буфер обмена:** Автоматическое копирование и вставка распознанного текста.
 
 ## История изменений (Changelog)
+
+### v2.2.0
+*   **История распознаваний:** Добавлена кнопка "История" (🕒) в главное окно. Теперь можно просматривать последние 50 записей, видеть исходный и обработанный текст, а также копировать любой из вариантов.
+*   **Улучшение интерфейса:** Окно истории выполнено в темной теме и поддерживает скроллинг.
 
 ### v2.1.3
 *   **Исправление ошибки в Recovery:** Исправлена проблема, когда папка recovery не создавалась автоматически при первом запуске.
@@ -76,12 +81,13 @@ Groq предоставляет щедрые бесплатные лимиты �
 
 ---
 
-# VoiceCapture 2.1.3 (English)
+# VoiceCapture 2.2.0 (English)
 
-VoiceCapture 2.1.3 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
+VoiceCapture 2.2.0 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
 
 ## Features
 
+*   **Recognition History:** Convenient view of the last 50 recordings with the ability to copy raw and processed text.
 *   **Portability:** Runs from a single executable file, no installation required.
 *   **Crash Recovery:** Automatic saving and recovery of recordings in case of crashes.
 *   **x2 Speedup:** Automatic audio speedup to save traffic and speed up recognition.
@@ -92,6 +98,10 @@ VoiceCapture 2.1.3 is a lightweight portable utility for voice typing and text p
 *   **Clipboard:** Automatic copying and pasting of recognized text.
 
 ## Changelog
+
+### v2.2.0
+*   **Recognition History:** Added a "History" button (🕒) to the main window. You can now view the last 50 recordings, see both raw and processed text, and copy either version.
+*   **UI Improvements:** The history window is designed in a dark theme and supports scrolling.
 
 ### v2.1.3
 *   **Recovery Bug Fix:** Fixed an issue where the recovery folder was not created automatically on first run.

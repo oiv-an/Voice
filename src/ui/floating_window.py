@@ -19,8 +19,10 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QFrame,
     QSizeGrip,
+    QMenu,
 )
 
+from PyQt6.QtGui import QMouseEvent, QGuiApplication, QAction
 from config.settings import UIConfig
 from ui.animated_icons import RecordingIcon, ProcessingIcon, ReadyIcon
 
@@ -142,10 +144,11 @@ class FloatingWindow(QWidget):
     settings_save_requested = pyqtSignal()
     retry_requested = pyqtSignal()
 
-    def __init__(self, ui_config: UIConfig) -> None:
+    def __init__(self, ui_config: UIConfig, history_manager=None) -> None:
         super().__init__()
 
         self._ui_config = ui_config
+        self.history_manager = history_manager
         self._drag_position: Optional[QPoint] = None
         self._state: str = "idle"
         self._compact: bool = False
@@ -186,6 +189,7 @@ class FloatingWindow(QWidget):
         top_layout.setContentsMargins(4, 4, 4, 4)
         top_layout.setSpacing(4)
         top_layout.addWidget(self.menu_button)
+        top_layout.addWidget(self.history_button)
         top_layout.addStretch()
         top_layout.addWidget(self.compact_button_normal)
         top_layout.addWidget(self.close_button)
@@ -255,6 +259,10 @@ class FloatingWindow(QWidget):
         self.menu_button = QPushButton("⚙️")
         self.menu_button.setFixedSize(24, 24)
         self.menu_button.clicked.connect(self._on_menu_clicked)
+
+        self.history_button = QPushButton("🕒")
+        self.history_button.setFixedSize(24, 24)
+        self.history_button.clicked.connect(self._on_history_clicked)
 
         self.close_button = QPushButton("✖️")
         self.close_button.setFixedSize(24, 24)
@@ -608,6 +616,20 @@ class FloatingWindow(QWidget):
         - всегда просим верхний уровень (App) открыть диалог настроек.
         """
         self.settings_requested.emit()
+
+    def _on_history_clicked(self) -> None:
+        """Показать диалог истории."""
+        if not self.history_manager:
+            return
+
+        from ui.history_dialog import HistoryDialog
+        
+        # Показываем основное окно, чтобы диалог был поверх
+        self.show()
+        self.raise_()
+        
+        dlg = HistoryDialog(self.history_manager, parent=self)
+        dlg.exec()
 
     def _on_compact_clicked(self) -> None:
         # Переключить режим окна

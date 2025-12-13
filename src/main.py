@@ -18,6 +18,7 @@ from recognition import create_recognizer
 from recognition.postprocessor import TextPostprocessor
 from utils.logger import setup_logging
 from utils.recovery import RecoveryManager
+from utils.history import HistoryManager
 from utils.audio_processing import speed_up_audio
 
 
@@ -62,9 +63,12 @@ class App(QObject):
         
         # Recovery manager
         self.recovery_manager = RecoveryManager(self.base_dir)
+        
+        # History manager
+        self.history_manager = HistoryManager(self.base_dir)
 
         # Core components
-        self.window = FloatingWindow(self.settings.ui)
+        self.window = FloatingWindow(self.settings.ui, self.history_manager)
         self.tray = SystemTrayIcon(self.window, self.settings.app)
         self.clipboard = ClipboardManager()
         self.audio_recorder = AudioRecorder(self.settings.audio)
@@ -443,6 +447,9 @@ class App(QObject):
 
                 # 5) положить ОБРАБОТАННЫЙ текст в буфер обмена (ВСЕГДА)
                 self.clipboard.copy(processed_text or "")
+                
+                # Save to history
+                self.history_manager.add_item(raw_text or "", processed_text or "")
 
                 # 6) авто-вставка текста через Ctrl+V (ВСЕГДА)
                 self.clipboard.paste()

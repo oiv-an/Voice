@@ -9,6 +9,9 @@ def build():
         shutil.rmtree("dist")
     if Path("build").exists():
         shutil.rmtree("build")
+    
+    # Создаем папку build заранее, чтобы избежать ошибки FileNotFoundError
+    Path("build").mkdir(exist_ok=True)
 
     # Параметры PyInstaller
     args = [
