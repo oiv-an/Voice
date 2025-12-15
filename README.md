@@ -1,6 +1,6 @@
-# VoiceCapture 2.2.1
+# VoiceCapture 2.2.2
 
-VoiceCapture 2.2.1 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
+VoiceCapture 2.2.2 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
 
 ## Особенности
 
@@ -16,6 +16,9 @@ VoiceCapture 2.2.1 — это легковесная портативная ут
 *   **Буфер обмена:** Автоматическое копирование и вставка распознанного текста.
 
 ## История изменений (Changelog)
+
+### v2.2.2
+*   **Пустой ввод / заглушка:** Если распознавание вернуло пустой текст — показывается «Продолжение следует...». Если LLM вернул ровно «Продолжение следует...» — заменяем на «.» (точку), чтобы не засорять вставку.
 
 ### v2.2.1
 *   **Исправление зависаний:** Устранена критическая ошибка, приводившая к зависанию приложения при быстром нажатии горячих клавиш (Ctrl+Win) или их комбинаций. Оптимизирована работа с потоками записи и обработки.
@@ -85,9 +88,9 @@ Groq предоставляет щедрые бесплатные лимиты �
 
 ---
 
-# VoiceCapture 2.2.1 (English)
+# VoiceCapture 2.2.2 (English)
 
-VoiceCapture 2.2.1 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
+VoiceCapture 2.2.2 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
 
 ## Features
 
@@ -103,6 +106,9 @@ VoiceCapture 2.2.1 is a lightweight portable utility for voice typing and text p
 *   **Clipboard:** Automatic copying and pasting of recognized text.
 
 ## Changelog
+
+### v2.2.2
+*   **Empty input / placeholder:** If recognition returns empty text, the app shows “To be continued...”. If the LLM returns exactly “To be continued...”, it is replaced with “.” to avoid polluting the pasted output.
 
 ### v2.2.1
 *   **Freeze Fix:** Fixed a critical bug that caused the application to freeze when quickly pressing hotkeys (Ctrl+Win) or their combinations. Optimized recording and processing threads.

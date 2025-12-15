@@ -1,6 +1,7 @@
 import sys
 import time
 import threading
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -438,6 +439,11 @@ class App(QObject):
                 # 2) regex-очистка (базовый препроцессинг всегда)
                 regex_text = TP._simple_cleanup(raw_text or "")
 
+                # Если пришёл пустой запрос/пустая транскрибация — показываем заглушку.
+                # ВАЖНО: это делаем ДО LLM, чтобы не гонять модель на пустом тексте.
+                if not regex_text.strip():
+                    regex_text = "Продолжение следует..."
+
                 # 3) LLM-постпроцессинг (если включён в конфиге)
                 processed_text = regex_text
                 try:
@@ -448,6 +454,11 @@ class App(QObject):
                 except Exception as exc:  # noqa: BLE001
                     _logger.exception("Unexpected LLM postprocess error: {}", exc)
                     self.message_shown.emit("Ошибка LLM-постпроцессинга. См. логи.", 3000)
+
+                # Перехват "Продолжение следует..." от модели и замена на "."
+                # Учитываем варианты с разным регистром и количеством точек.
+                if re.fullmatch(r"(?iu)\s*продолжение\s+следует\s*\.{3}\s*", processed_text or ""):
+                    processed_text = "."
 
                 # 4) показать оба варианта в окне (через сигнал)
                 self.text_updated.emit(raw_text or "", processed_text or "")
