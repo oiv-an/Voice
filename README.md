@@ -18,7 +18,7 @@ VoiceCapture 2.2.3 — это легковесная портативная ут
 ## История изменений (Changelog)
 
 ### v2.2.3
-*   **Фильтрация галлюцинаций LLM:** Теперь фразы-заглушки вроде «Продолжение следует...» или «Вот такой вот», которые иногда генерируют модели на пустом вводе, полностью игнорируются. Они больше не попадают в буфер обмена и не вставляются в текст.
+*   **Фильтрация галлюцинаций LLM:** Теперь фразы-заглушки вроде «Продолжение следует...» или «Субтитры сделал DimaTorzok», которые иногда генерируют модели на пустом вводе, полностью игнорируются. Они больше не попадают в буфер обмена и не вставляются в текст.
 
 ### v2.2.2
 *   **Пустой ввод / заглушка:** Если распознавание вернуло пустой текст — показывается «Продолжение следует...».
@@ -111,7 +111,7 @@ VoiceCapture 2.2.3 is a lightweight portable utility for voice typing and text p
 ## Changelog
 
 ### v2.2.3
-*   **LLM Hallucination Filtering:** Placeholder phrases like “To be continued...” or “Вот такой вот” (common LLM artifacts on empty input) are now completely ignored. They are no longer added to the clipboard or pasted.
+*   **LLM Hallucination Filtering:** Placeholder phrases like “To be continued...” or “Субтитры сделал DimaTorzok” (common LLM artifacts on empty input) are now completely ignored. They are no longer added to the clipboard or pasted.
 
 ### v2.2.2
 *   **Empty input / placeholder:** If recognition returns empty text, the app shows “To be continued...”.
