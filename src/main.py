@@ -455,10 +455,24 @@ class App(QObject):
                     _logger.exception("Unexpected LLM postprocess error: {}", exc)
                     self.message_shown.emit("Ошибка LLM-постпроцессинга. См. логи.", 3000)
 
-                # Перехват "Продолжение следует..." от модели и замена на "."
-                # Учитываем варианты с разным регистром и количеством точек.
-                if re.fullmatch(r"(?iu)\s*продолжение\s+следует\s*\.{3}\s*", processed_text or ""):
-                    processed_text = "."
+                # Фильтрация нежелательных ответов модели
+                if processed_text:
+                    # Если ответ содержит только "продолжение следует" или "вот такой вот" (с любыми знаками препинания)
+                    # то мы его полностью игнорируем (не добавляем в буфер и не вставляем).
+                    bad_patterns = [
+                        r"(?iu)\s*продолжение\s+следует\s*[\.*]*\s*",
+                        r"(?iu)\s*вот\s+такой\s+вот\s*[\.*]*\s*"
+                    ]
+                    should_skip = False
+                    for pattern in bad_patterns:
+                        if re.fullmatch(pattern, processed_text):
+                            should_skip = True
+                            break
+                    
+                    if should_skip:
+                        logger.info("Skipping model response: {}", processed_text)
+                        self.state_changed.emit("ready")
+                        return
 
                 # 4) показать оба варианта в окне (через сигнал)
                 self.text_updated.emit(raw_text or "", processed_text or "")

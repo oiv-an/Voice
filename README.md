@@ -1,6 +1,6 @@
-# VoiceCapture 2.2.2
+# VoiceCapture 2.2.3
 
-VoiceCapture 2.2.2 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
+VoiceCapture 2.2.3 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
 
 ## Особенности
 
@@ -17,8 +17,11 @@ VoiceCapture 2.2.2 — это легковесная портативная ут
 
 ## История изменений (Changelog)
 
+### v2.2.3
+*   **Фильтрация галлюцинаций LLM:** Теперь фразы-заглушки вроде «Продолжение следует...» или «Вот такой вот», которые иногда генерируют модели на пустом вводе, полностью игнорируются. Они больше не попадают в буфер обмена и не вставляются в текст.
+
 ### v2.2.2
-*   **Пустой ввод / заглушка:** Если распознавание вернуло пустой текст — показывается «Продолжение следует...». Если LLM вернул ровно «Продолжение следует...» — заменяем на «.» (точку), чтобы не засорять вставку.
+*   **Пустой ввод / заглушка:** Если распознавание вернуло пустой текст — показывается «Продолжение следует...».
 
 ### v2.2.1
 *   **Исправление зависаний:** Устранена критическая ошибка, приводившая к зависанию приложения при быстром нажатии горячих клавиш (Ctrl+Win) или их комбинаций. Оптимизирована работа с потоками записи и обработки.
@@ -88,9 +91,9 @@ Groq предоставляет щедрые бесплатные лимиты �
 
 ---
 
-# VoiceCapture 2.2.2 (English)
+# VoiceCapture 2.2.3 (English)
 
-VoiceCapture 2.2.2 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
+VoiceCapture 2.2.3 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
 
 ## Features
 
@@ -107,8 +110,11 @@ VoiceCapture 2.2.2 is a lightweight portable utility for voice typing and text p
 
 ## Changelog
 
+### v2.2.3
+*   **LLM Hallucination Filtering:** Placeholder phrases like “To be continued...” or “Вот такой вот” (common LLM artifacts on empty input) are now completely ignored. They are no longer added to the clipboard or pasted.
+
 ### v2.2.2
-*   **Empty input / placeholder:** If recognition returns empty text, the app shows “To be continued...”. If the LLM returns exactly “To be continued...”, it is replaced with “.” to avoid polluting the pasted output.
+*   **Empty input / placeholder:** If recognition returns empty text, the app shows “To be continued...”.
 
 ### v2.2.1
 *   **Freeze Fix:** Fixed a critical bug that caused the application to freeze when quickly pressing hotkeys (Ctrl+Win) or their combinations. Optimized recording and processing threads.
