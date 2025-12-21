@@ -461,8 +461,8 @@ class App(QObject):
                     # Если ответ содержит только "продолжение следует" или "Субтитры сделал DimaTorzok" (с любыми знаками препинания)
                     # то мы его полностью игнорируем (не добавляем в буфер и не вставляем).
                     bad_patterns = [
-                        r"(?iu)\s*продолжение\s+следует\s*[\.*]*\s*",
-                        r"(?iu)\s*субтитры\s+сделал\s+dimatorzok\s*[\.*]*\s*"
+                        r"(?iu)\s*продолжение\s+следует[\s\.*]*",
+                        r"(?iu)\s*субтитры\s+сделал\s+dimatorzok[\s\.*]*"
                     ]
                     should_skip = False
                     for pattern in bad_patterns:
@@ -479,13 +479,16 @@ class App(QObject):
                 self.text_updated.emit(raw_text or "", processed_text or "")
 
                 # 5) положить ОБРАБОТАННЫЙ текст в буфер обмена (ВСЕГДА)
-                self.clipboard.copy(processed_text or "")
+                # 5) положить ОБРАБОТАННЫЙ текст в буфер обмена (ВСЕГДА)
+                # Выполняем в отдельном потоке, чтобы не блокировать основной цикл обработки
+                def update_clipboard_and_paste(text):
+                    self.clipboard.copy(text)
+                    self.clipboard.paste()
+
+                threading.Thread(target=update_clipboard_and_paste, args=(processed_text or "",), daemon=True).start()
                 
                 # Save to history
                 self.history_manager.add_item(raw_text or "", processed_text or "")
-
-                # 6) авто-вставка текста через Ctrl+V (ВСЕГДА)
-                self.clipboard.paste()
 
                 # 7) если это была идея, добавить в список идей
                 if is_idea:
