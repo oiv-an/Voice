@@ -1,9 +1,10 @@
-# VoiceCapture 2.2.3
+# VoiceCapture 2.2.4
 
-VoiceCapture 2.2.3 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
+VoiceCapture 2.2.4 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
 
 ## Особенности
 
+*   **Сохранение размера окна:** Теперь приложение запоминает размер окна. Если вы изменили его размер, он сохранится и восстановится при следующем запуске.
 *   **Стабильность:** Исправлена проблема с зависанием приложения при быстром переключении горячих клавиш.
 *   **История распознаваний:** Удобный просмотр последних 50 записей с возможностью копирования исходного и обработанного текста.
 *   **Портативность:** Работает из одного исполняемого файла, не требует установки.
@@ -16,6 +17,9 @@ VoiceCapture 2.2.3 — это легковесная портативная ут
 *   **Буфер обмена:** Автоматическое копирование и вставка распознанного текста.
 
 ## История изменений (Changelog)
+
+### v2.2.4
+*   **Сохранение размера окна:** Реализовано автоматическое сохранение размеров главного окна. При изменении размера (через уголок внизу справа) новые габариты записываются в `config.yaml` и применяются при перезапуске.
 
 ### v2.2.3
 *   **Фильтрация галлюцинаций LLM:** Теперь фразы-заглушки вроде «Продолжение следует...» или «Субтитры сделал DimaTorzok», которые иногда генерируют модели на пустом вводе, полностью игнорируются. Они больше не попадают в буфер обмена и не вставляются в текст.
@@ -91,12 +95,13 @@ Groq предоставляет щедрые бесплатные лимиты �
 
 ---
 
-# VoiceCapture 2.2.3 (English)
+# VoiceCapture 2.2.4 (English)
 
-VoiceCapture 2.2.3 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
+VoiceCapture 2.2.4 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
 
 ## Features
 
+*   **Window Size Persistence:** The application now remembers its window size. If you resize it, the dimensions are saved and restored on the next launch.
 *   **Stability:** Fixed application freeze issue when quickly toggling hotkeys.
 *   **Recognition History:** Convenient view of the last 50 recordings with the ability to copy raw and processed text.
 *   **Portability:** Runs from a single executable file, no installation required.
@@ -109,6 +114,9 @@ VoiceCapture 2.2.3 is a lightweight portable utility for voice typing and text p
 *   **Clipboard:** Automatic copying and pasting of recognized text.
 
 ## Changelog
+
+### v2.2.4
+*   **Window Size Persistence:** Implemented automatic saving of the main window dimensions. When resized (via the bottom-right grip), the new size is saved to `config.yaml` and restored upon restart.
 
 ### v2.2.3
 *   **LLM Hallucination Filtering:** Placeholder phrases like “To be continued...” or “Субтитры сделал DimaTorzok” (common LLM artifacts on empty input) are now completely ignored. They are no longer added to the clipboard or pasted.

@@ -145,6 +145,7 @@ class App(QObject):
         self.window.settings_requested.connect(self.open_settings_dialog)
         self.window.exit_requested.connect(self.quit)
         self.window.retry_requested.connect(self._retry_processing)
+        self.window.settings_save_requested.connect(lambda: AppSettings.save_default(self.settings))
         self.tray.show_window_requested.connect(self.show_window)
         self.tray.settings_requested.connect(self.open_settings_dialog)
         self.tray.toggle_debug_requested.connect(self.toggle_debug_mode)

@@ -251,6 +251,13 @@ class FloatingWindow(QWidget):
                 rect.right() - self.size_grip.width(),
                 rect.bottom() - self.size_grip.height()
             )
+        
+        # Сохраняем размер в конфиг, если мы не в компактном режиме
+        if not self._compact and hasattr(self, "_ui_config"):
+            new_size = event.size()
+            self._ui_config.window_size = (new_size.width(), new_size.height())
+            self.settings_save_requested.emit()
+            
         super().resizeEvent(event)
 
     def _create_controls(self) -> None:
