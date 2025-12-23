@@ -1,9 +1,11 @@
-# VoiceCapture 2.2.4
+# VoiceCapture 2.2.5
 
-VoiceCapture 2.2.4 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
+VoiceCapture 2.2.5 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
 
 ## Особенности
 
+*   **Очистка RECOVERY:** Добавлена кнопка в настройках для ручной очистки папки с временными файлами.
+*   **Умное управление файлами:** Пустые аудиофайлы больше не сохраняются, а поврежденные записи автоматически удаляются при запуске.
 *   **Сохранение размера окна:** Теперь приложение запоминает размер окна. Если вы изменили его размер, он сохранится и восстановится при следующем запуске.
 *   **Стабильность:** Исправлена проблема с зависанием приложения при быстром переключении горячих клавиш.
 *   **История распознаваний:** Удобный просмотр последних 50 записей с возможностью копирования исходного и обработанного текста.
@@ -17,6 +19,12 @@ VoiceCapture 2.2.4 — это легковесная портативная ут
 *   **Буфер обмена:** Автоматическое копирование и вставка распознанного текста.
 
 ## История изменений (Changelog)
+
+### v2.2.5
+*   **Обслуживание и стабильность:**
+    *   Добавлена кнопка "Очистить папку RECOVERY" в настройках.
+    *   Исправлен баг с накоплением пустых аудиофайлов.
+    *   Реализована автоматическая очистка битых файлов восстановления при старте.
 
 ### v2.2.4
 *   **Сохранение размера окна:** Реализовано автоматическое сохранение размеров главного окна. При изменении размера (через уголок внизу справа) новые габариты записываются в `config.yaml` и применяются при перезапуске.
@@ -95,12 +103,14 @@ Groq предоставляет щедрые бесплатные лимиты �
 
 ---
 
-# VoiceCapture 2.2.4 (English)
+# VoiceCapture 2.2.5 (English)
 
-VoiceCapture 2.2.4 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
+VoiceCapture 2.2.5 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
 
 ## Features
 
+*   **RECOVERY Cleanup:** Added a button in settings to manually clear the temporary files folder.
+*   **Smart File Management:** Empty audio files are no longer saved, and corrupted recordings are automatically deleted on startup.
 *   **Window Size Persistence:** The application now remembers its window size. If you resize it, the dimensions are saved and restored on the next launch.
 *   **Stability:** Fixed application freeze issue when quickly toggling hotkeys.
 *   **Recognition History:** Convenient view of the last 50 recordings with the ability to copy raw and processed text.
@@ -114,6 +124,12 @@ VoiceCapture 2.2.4 is a lightweight portable utility for voice typing and text p
 *   **Clipboard:** Automatic copying and pasting of recognized text.
 
 ## Changelog
+
+### v2.2.5
+*   **Maintenance & Stability:**
+    *   Added "Clear RECOVERY folder" button in settings.
+    *   Fixed bug with empty audio files accumulation.
+    *   Implemented automatic cleanup of corrupted recovery files on startup.
 
 ### v2.2.4
 *   **Window Size Persistence:** Implemented automatic saving of the main window dimensions. When resized (via the bottom-right grip), the new size is saved to `config.yaml` and restored upon restart.

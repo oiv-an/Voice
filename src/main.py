@@ -296,14 +296,21 @@ class App(QObject):
                 processed_audio = audio_data
 
             # Save audio to disk for recovery
+            recovery_path = None
             try:
-                recovery_path = self.recovery_manager.save_audio(processed_audio)
+                # Don't save empty audio
+                if len(processed_audio.samples) > 0:
+                    recovery_path = self.recovery_manager.save_audio(processed_audio)
             except Exception:
                 # If saving fails, we still try to process in-memory
                 recovery_path = None
 
-            thread = threading.Thread(target=self._process_audio, args=(processed_audio, final_is_idea, recovery_path))
-            thread.start()
+            if len(processed_audio.samples) > 0:
+                thread = threading.Thread(target=self._process_audio, args=(processed_audio, final_is_idea, recovery_path))
+                thread.start()
+            else:
+                logger.warning("Empty audio recorded, skipping processing.")
+                self.state_changed.emit("idle")
 
         if not self.audio_recorder.start(on_finished=on_finished):
             # Failed to start (e.g. previous thread still stopping)
@@ -473,6 +480,8 @@ class App(QObject):
                     if should_skip:
                         logger.info("Skipping model response: {}", processed_text)
                         self.state_changed.emit("ready")
+                        if recovery_path:
+                            self.recovery_manager.cleanup(recovery_path)
                         return
 
                 # 4) показать оба варианта в окне (через сигнал)
@@ -625,17 +634,20 @@ class App(QObject):
             for filepath in files:
                 logger.info(f"Recovering file: {filepath}")
                 audio_data = self.recovery_manager.load_audio(filepath)
-                if audio_data:
-                    # We process it as a normal recording.
-                    # Note: this will trigger UI updates and clipboard paste.
-                    # We pass the filepath so it gets deleted on success.
-                    
-                    self._process_audio(audio_data, is_idea=False, recovery_path=filepath)
-                    
-                    # Small delay between files
-                    time.sleep(1)
-                else:
-                    logger.error(f"Failed to load audio from {filepath}, skipping.")
+                
+                # Check if file is empty or invalid
+                if not audio_data or len(audio_data.samples) == 0:
+                    logger.warning(f"Recovery file {filepath} is empty or invalid, deleting.")
+                    self.recovery_manager.cleanup(filepath)
+                    continue
+
+                # We process it as a normal recording.
+                # Note: this will trigger UI updates and clipboard paste.
+                # We pass the filepath so it gets deleted on success.
+                self._process_audio(audio_data, is_idea=False, recovery_path=filepath)
+                
+                # Small delay between files
+                time.sleep(1)
 
         threading.Thread(target=process_recovery, daemon=True).start()
 

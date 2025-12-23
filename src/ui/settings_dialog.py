@@ -123,6 +123,18 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(audio_group)
 
+        # === Блок: Очистка =====================================================
+        cleanup_group = QGroupBox("Обслуживание")
+        cleanup_layout = QVBoxLayout(cleanup_group)
+        
+        from PyQt6.QtWidgets import QPushButton
+        self.clear_recovery_btn = QPushButton("Очистить папку RECOVERY")
+        self.clear_recovery_btn.setStyleSheet("background-color: #4a2b2b; color: white; font-weight: bold;")
+        self.clear_recovery_btn.clicked.connect(self._on_clear_recovery)
+        cleanup_layout.addWidget(self.clear_recovery_btn)
+        
+        layout.addWidget(cleanup_group)
+
         # === Блок: сервис распознавания (backend + ключи) ======================
         backend_group = QGroupBox("Сервис распознавания")
         backend_form = QFormLayout(backend_group)
@@ -381,6 +393,36 @@ class SettingsDialog(QDialog):
         # OpenAI поля видимы только при OpenAI backend
         self.openai_api_key_edit.setVisible(is_openai)
         self.openai_base_url_edit.setVisible(is_openai)
+
+    def _on_clear_recovery(self) -> None:
+        from PyQt6.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            self,
+            "Очистка",
+            "Вы уверены, что хотите удалить все файлы из папки RECOVERY?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # Мы не можем напрямую вызвать recovery_manager здесь без прокидывания его в конструктор,
+                # но мы можем использовать base_dir из настроек или просто найти его.
+                # Однако, в App уже есть recovery_manager.
+                # Самый простой путь для Senior Tech Partner - сделать это через App или напрямую.
+                from utils.recovery import RecoveryManager
+                from pathlib import Path
+                import sys
+                
+                if getattr(sys, "frozen", False):
+                    base_dir = Path(sys.executable).resolve().parent
+                else:
+                    base_dir = Path(__file__).resolve().parents[2]
+                
+                rm = RecoveryManager(base_dir)
+                rm.clear_all()
+                QMessageBox.information(self, "Успех", "Папка RECOVERY очищена.")
+            except Exception as e:
+                logger.error(f"Failed to clear recovery via UI: {e}")
+                QMessageBox.critical(self, "Ошибка", f"Не удалось очистить папку: {e}")
 
     def _on_accept(self) -> None:
         self._result_settings = self._build_new_settings()

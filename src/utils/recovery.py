@@ -85,3 +85,15 @@ class RecoveryManager:
                 logger.info(f"Recovery file deleted: {filepath}")
         except Exception as e:
             logger.error(f"Failed to delete recovery file {filepath}: {e}")
+
+    def clear_all(self):
+        """
+        Deletes all files in the recovery directory.
+        """
+        try:
+            files = self.get_recovery_files()
+            for f in files:
+                self.cleanup(f)
+            logger.info(f"Recovery directory cleared. Deleted {len(files)} files.")
+        except Exception as e:
+            logger.error(f"Failed to clear recovery directory: {e}")
