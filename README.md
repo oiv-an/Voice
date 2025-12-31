@@ -1,6 +1,6 @@
-# VoiceCapture 2.2.5
+# VoiceCapture 2.2.6
 
-VoiceCapture 2.2.5 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
+VoiceCapture 2.2.6 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
 
 ## Особенности
 
@@ -19,6 +19,9 @@ VoiceCapture 2.2.5 — это легковесная портативная ут
 *   **Буфер обмена:** Автоматическое копирование и вставка распознанного текста.
 
 ## История изменений (Changelog)
+
+### v2.2.6
+*   **Улучшение интерфейса:** Если в настройках отключен постпроцессинг (LLM), второе текстовое поле в главном окне полностью скрывается, чтобы не занимать лишнее место.
 
 ### v2.2.5
 *   **Обслуживание и стабильность:**
@@ -103,9 +106,9 @@ Groq предоставляет щедрые бесплатные лимиты �
 
 ---
 
-# VoiceCapture 2.2.5 (English)
+# VoiceCapture 2.2.6 (English)
 
-VoiceCapture 2.2.5 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
+VoiceCapture 2.2.6 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
 
 ## Features
 
@@ -124,6 +127,9 @@ VoiceCapture 2.2.5 is a lightweight portable utility for voice typing and text p
 *   **Clipboard:** Automatic copying and pasting of recognized text.
 
 ## Changelog
+
+### v2.2.6
+*   **UI Improvement:** If post-processing (LLM) is disabled in settings, the second text field in the main window is completely hidden to save space.
 
 ### v2.2.5
 *   **Maintenance & Stability:**

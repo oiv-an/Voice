@@ -71,6 +71,9 @@ class App(QObject):
 
         # Core components
         self.window = FloatingWindow(self.settings.ui, self.history_manager)
+        # Устанавливаем начальное состояние постпроцессинга
+        self.window.set_postprocess_enabled(self.settings.postprocess.enabled)
+
         self.tray = SystemTrayIcon(self.window, self.settings.app)
         self.clipboard = ClipboardManager()
         self.audio_recorder = AudioRecorder(self.settings.audio)
@@ -252,6 +255,9 @@ class App(QObject):
             if hasattr(self.window, "set_processed_text"):
                 self.window.set_processed_text("")
             self.window.result_label.setText("")
+
+        # Обновляем состояние постпроцессинга в окне
+        self.window.set_postprocess_enabled(self.settings.postprocess.enabled)
 
         self.window.show_message("Настройки сохранены.", timeout_ms=1500)
 

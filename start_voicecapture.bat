@@ -1,9 +1,9 @@
 @echo off
 REM Автозапуск VoiceCapture при старте Windows
-REM Предполагается, что проект находится в E:\PO\PHYTON\Voice
+REM Предполагается, что проект находится в текущей директории
 REM и используется глобальное окружение Python 3.12 (без venv)
 
-cd /d E:\PO\PHYTON\Voice
+cd /d "%~dp0"
 
 REM Показываем, каким Python запускаем приложение
 echo Starting VoiceCapture with system Python...
