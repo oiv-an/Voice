@@ -153,6 +153,7 @@ class FloatingWindow(QWidget):
         self._state: str = "idle"
         self._compact: bool = False
         self._text_blocks_enabled: bool = True
+        self._postprocess_enabled: bool = True
 
         # режимы содержимого: "main" (основной) / "settings" (панель настроек)
         self._content_mode: str = "main"
@@ -525,11 +526,25 @@ class FloatingWindow(QWidget):
         self._apply_compact_mode()
         self.toggle_compact_requested.emit()
 
+    def set_postprocess_enabled(self, enabled: bool) -> None:
+        """Включить/выключить отображение поля постпроцессинга."""
+        self._postprocess_enabled = enabled
+        
+        # Переключаем лейбл, куда будут падать системные сообщения (например, про API key)
+        if enabled:
+            self.result_label = self.processed_label
+        else:
+            self.result_label = self.raw_label
+            
+        self._refresh_text_block_visibility()
+
     def _refresh_text_block_visibility(self) -> None:
-        # Теперь видимость зависит только от состояния, а не от режима compact
-        should_show = self._text_blocks_enabled
-        self.raw_label.setVisible(should_show)
-        self.processed_label.setVisible(should_show)
+        # Теперь видимость зависит от состояния и флага постпроцессинга
+        should_show_raw = self._text_blocks_enabled
+        should_show_processed = self._text_blocks_enabled and self._postprocess_enabled
+        
+        self.raw_label.setVisible(should_show_raw)
+        self.processed_label.setVisible(should_show_processed)
 
     def _apply_compact_mode(self) -> None:
         if self._compact:

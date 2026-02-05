@@ -1,9 +1,19 @@
 import sys
+import os
 import time
 import threading
 import re
 from pathlib import Path
 from typing import Optional
+
+# SSL сертификаты для PyInstaller onefile сборки
+# Должно быть в самом начале, до любых импортов requests/httpx/etc.
+if getattr(sys, 'frozen', False):
+    # PyInstaller распаковывает всё во временную папку sys._MEIPASS
+    import certifi
+    ca_bundle = certifi.where()
+    os.environ['SSL_CERT_FILE'] = ca_bundle
+    os.environ['REQUESTS_CA_BUNDLE'] = ca_bundle
 
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QApplication
@@ -71,6 +81,9 @@ class App(QObject):
 
         # Core components
         self.window = FloatingWindow(self.settings.ui, self.history_manager)
+        # Устанавливаем начальное состояние постпроцессинга
+        self.window.set_postprocess_enabled(self.settings.postprocess.enabled)
+
         self.tray = SystemTrayIcon(self.window, self.settings.app)
         self.clipboard = ClipboardManager()
         self.audio_recorder = AudioRecorder(self.settings.audio)
@@ -252,6 +265,9 @@ class App(QObject):
             if hasattr(self.window, "set_processed_text"):
                 self.window.set_processed_text("")
             self.window.result_label.setText("")
+
+        # Обновляем состояние постпроцессинга в окне
+        self.window.set_postprocess_enabled(self.settings.postprocess.enabled)
 
         self.window.show_message("Настройки сохранены.", timeout_ms=1500)
 

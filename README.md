@@ -1,9 +1,10 @@
-# VoiceCapture 2.2.5
+# VoiceCapture 2.2.7
 
-VoiceCapture 2.2.5 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
+VoiceCapture 2.2.7 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
 
 ## Особенности
 
+*   **Исправлена ошибка SSL:** Исправлена проблема с SSL-сертификатами при работе собранного exe-файла. Теперь API-запросы к Groq и OpenAI работают корректно.
 *   **Очистка RECOVERY:** Добавлена кнопка в настройках для ручной очистки папки с временными файлами.
 *   **Умное управление файлами:** Пустые аудиофайлы больше не сохраняются, а поврежденные записи автоматически удаляются при запуске.
 *   **Сохранение размера окна:** Теперь приложение запоминает размер окна. Если вы изменили его размер, он сохранится и восстановится при следующем запуске.
@@ -19,6 +20,12 @@ VoiceCapture 2.2.5 — это легковесная портативная ут
 *   **Буфер обмена:** Автоматическое копирование и вставка распознанного текста.
 
 ## История изменений (Changelog)
+
+### v2.2.7
+*   **Исправлена ошибка SSL:** Исправлена проблема с SSL-сертификатами при работе собранного exe-файла. Теперь API-запросы к Groq и OpenAI работают корректно.
+
+### v2.2.6
+*   **Улучшение интерфейса:** Если в настройках отключен постпроцессинг (LLM), второе текстовое поле в главном окне полностью скрывается, чтобы не занимать лишнее место.
 
 ### v2.2.5
 *   **Обслуживание и стабильность:**
@@ -103,12 +110,13 @@ Groq предоставляет щедрые бесплатные лимиты �
 
 ---
 
-# VoiceCapture 2.2.5 (English)
+# VoiceCapture 2.2.7 (English)
 
-VoiceCapture 2.2.5 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
+VoiceCapture 2.2.7 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
 
 ## Features
 
+*   **SSL Certificate Fix:** Fixed an issue with SSL certificates when running the built exe file. API requests to Groq and OpenAI now work correctly.
 *   **RECOVERY Cleanup:** Added a button in settings to manually clear the temporary files folder.
 *   **Smart File Management:** Empty audio files are no longer saved, and corrupted recordings are automatically deleted on startup.
 *   **Window Size Persistence:** The application now remembers its window size. If you resize it, the dimensions are saved and restored on the next launch.
@@ -124,6 +132,12 @@ VoiceCapture 2.2.5 is a lightweight portable utility for voice typing and text p
 *   **Clipboard:** Automatic copying and pasting of recognized text.
 
 ## Changelog
+
+### v2.2.7
+*   **SSL Certificate Fix:** Fixed an issue with SSL certificates when running the built exe file. API requests to Groq and OpenAI now work correctly.
+
+### v2.2.6
+*   **UI Improvement:** If post-processing (LLM) is disabled in settings, the second text field in the main window is completely hidden to save space.
 
 ### v2.2.5
 *   **Maintenance & Stability:**

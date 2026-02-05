@@ -15,7 +15,7 @@ import yaml
 @dataclass
 class AppInfoConfig:
     name: str = "VoiceCapture"
-    version: str = "2.2.4"
+    version: str = "2.2.6"
     language: str = "ru"
     debug: bool = False
 
