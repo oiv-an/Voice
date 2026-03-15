@@ -11,8 +11,9 @@ def build():
     if Path("build").exists():
         shutil.rmtree("build")
     
-    # Создаем папку build заранее, чтобы избежать ошибки FileNotFoundError
+    # Создаем папки build заранее, чтобы избежать ошибки FileNotFoundError
     Path("build").mkdir(exist_ok=True)
+    Path("build/VoiceCapture").mkdir(exist_ok=True)
 
     # Путь к сертификатам certifi для SSL в requests
     certifi_path = certifi.where()

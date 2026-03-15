@@ -1,221 +1,352 @@
-# VoiceCapture 2.2.7
+# VoiceCapture 2.3.0
 
-VoiceCapture 2.2.7 — это легковесная портативная утилита для голосового ввода и обработки текста с использованием облачных API (Groq, OpenAI).
+**VoiceCapture** — портативная open-source утилита для голосового ввода на Windows. Записывает речь, транскрибирует через облачные API (Groq, OpenAI Whisper), улучшает текст через LLM и автоматически вставляет результат в активное поле. Поддерживает интеграцию с n8n Webhook для автоматизации обработки голосовых заметок.
 
-## Особенности
-
-*   **Исправлена ошибка SSL:** Исправлена проблема с SSL-сертификатами при работе собранного exe-файла. Теперь API-запросы к Groq и OpenAI работают корректно.
-*   **Очистка RECOVERY:** Добавлена кнопка в настройках для ручной очистки папки с временными файлами.
-*   **Умное управление файлами:** Пустые аудиофайлы больше не сохраняются, а поврежденные записи автоматически удаляются при запуске.
-*   **Сохранение размера окна:** Теперь приложение запоминает размер окна. Если вы изменили его размер, он сохранится и восстановится при следующем запуске.
-*   **Стабильность:** Исправлена проблема с зависанием приложения при быстром переключении горячих клавиш.
-*   **История распознаваний:** Удобный просмотр последних 50 записей с возможностью копирования исходного и обработанного текста.
-*   **Портативность:** Работает из одного исполняемого файла, не требует установки.
-*   **Crash Recovery:** Автоматическое сохранение и восстановление записей при сбоях.
-*   **Ускорение x2:** Автоматическое ускорение аудио для экономии трафика и быстрого распознавания.
-*   **Выбор микрофона:** Возможность выбора конкретного устройства ввода в настройках.
-*   **Облачное распознавание:** Поддержка Groq (Whisper) и OpenAI (Whisper).
-*   **Постобработка:** Автоматическое улучшение текста с помощью LLM (исправление пунктуации, стиля и т.д.).
-*   **Глобальные горячие клавиши:** Удобное управление записью из любого приложения.
-*   **Буфер обмена:** Автоматическое копирование и вставка распознанного текста.
-
-## История изменений (Changelog)
-
-### v2.2.7
-*   **Исправлена ошибка SSL:** Исправлена проблема с SSL-сертификатами при работе собранного exe-файла. Теперь API-запросы к Groq и OpenAI работают корректно.
-
-### v2.2.6
-*   **Улучшение интерфейса:** Если в настройках отключен постпроцессинг (LLM), второе текстовое поле в главном окне полностью скрывается, чтобы не занимать лишнее место.
-
-### v2.2.5
-*   **Обслуживание и стабильность:**
-    *   Добавлена кнопка "Очистить папку RECOVERY" в настройках.
-    *   Исправлен баг с накоплением пустых аудиофайлов.
-    *   Реализована автоматическая очистка битых файлов восстановления при старте.
-
-### v2.2.4
-*   **Сохранение размера окна:** Реализовано автоматическое сохранение размеров главного окна. При изменении размера (через уголок внизу справа) новые габариты записываются в `config.yaml` и применяются при перезапуске.
-
-### v2.2.3
-*   **Фильтрация галлюцинаций LLM:** Теперь фразы-заглушки вроде «Продолжение следует...» или «Субтитры сделал DimaTorzok», которые иногда генерируют модели на пустом вводе, полностью игнорируются. Они больше не попадают в буфер обмена и не вставляются в текст.
-
-### v2.2.2
-*   **Пустой ввод / заглушка:** Если распознавание вернуло пустой текст — показывается «Продолжение следует...».
-
-### v2.2.1
-*   **Исправление зависаний:** Устранена критическая ошибка, приводившая к зависанию приложения при быстром нажатии горячих клавиш (Ctrl+Win) или их комбинаций. Оптимизирована работа с потоками записи и обработки.
-
-### v2.2.0
-*   **История распознаваний:** Добавлена кнопка "История" (🕒) в главное окно. Теперь можно просматривать последние 50 записей, видеть исходный и обработанный текст, а также копировать любой из вариантов.
-*   **Улучшение интерфейса:** Окно истории выполнено в темной теме и поддерживает скроллинг.
-
-### v2.1.3
-*   **Исправление ошибки в Recovery:** Исправлена проблема, когда папка recovery не создавалась автоматически при первом запуске.
-
-### v2.1.2
-*   **Изменение размера окна:** Добавлена возможность изменять размер главного окна (потяните за правый нижний угол).
-*   **Улучшенное логирование:** Логи теперь записываются в обратном порядке (новые записи сверху) и автоматически очищаются при достижении размера 1 МБ, чтобы не занимать лишнее место.
-
-### v2.1.1
-*   **Настраиваемый системный промпт:** В настройки добавлено поле для редактирования системного промпта LLM. Теперь можно гибко настраивать инструкции для постобработки текста (например, задать стиль, попросить переводить текст и т.д.) без изменения кода.
-
-### v2.1.0
-*   Добавлена поддержка Groq API.
-*   Улучшен интерфейс настроек.
-
-## Установка и запуск
-
-1.  Скачайте исполняемый файл `VoiceCapture.exe`.
-2.  Запустите файл.
-3.  При первом запуске откройте настройки (иконка шестеренки) и введите API-ключ для выбранного сервиса (Groq или OpenAI).
-
-### Получение API ключа Groq (Бесплатно)
-
-Groq предоставляет щедрые бесплатные лимиты для разработчиков. Это отличный способ начать использовать приложение бесплатно.
-
-1.  Перейдите на [console.groq.com](https://console.groq.com).
-2.  Зарегистрируйтесь или войдите в систему.
-3.  Создайте новый API ключ в разделе "API Keys".
-4.  Скопируйте ключ и вставьте его в настройки VoiceCapture.
-
-## Использование
-
-*   **Запись:** Нажмите `Ctrl + Win` (по умолчанию) для начала записи. Отпустите клавиши для завершения.
-*   **Запись идеи:** Нажмите `Ctrl + Win + Alt` для записи "идеи" (сохраняется в отдельный лог).
-*   **Отмена:** Нажмите `Esc` во время записи для отмены.
-
-## Настройка
-
-В настройках можно изменить:
-*   Сервис распознавания (Groq, OpenAI).
-*   API-ключи.
-*   Модели распознавания и постобработки.
-*   Системный промпт для постобработки (инструкция для LLM).
-*   Горячие клавиши.
-*   Параметры аудио (устройство, частота дискретизации и т.д.).
-
-## Сборка из исходников
-
-Для сборки портативной версии (exe) требуется Python 3.12+.
-
-1.  Установите зависимости:
-    ```bash
-    pip install -r requirements.txt
-    ```
-2.  Запустите скрипт сборки:
-    ```bash
-    python build_exe.py
-    ```
-3.  Готовый файл будет находиться в папке `dist`.
+> ⭐ Проект открытый. Fork, Star, PR приветствуются.
 
 ---
 
-# VoiceCapture 2.2.7 (English)
+## 🚀 Быстрый старт
 
-VoiceCapture 2.2.7 is a lightweight portable utility for voice typing and text processing using cloud APIs (Groq, OpenAI).
+1. Скачайте `VoiceCapture.exe` из раздела [Releases](https://github.com/your-repo/releases).
+2. Запустите файл — установка не требуется.
+3. Откройте настройки (⚙️) и введите API-ключ Groq или OpenAI.
+4. Зажмите `Ctrl + Win` — говорите — отпустите. Текст вставится сам.
+
+---
+
+## ✨ Возможности
+
+| Функция                 | Описание                                                          |
+| ----------------------- | ----------------------------------------------------------------- |
+| 🎙️ **Голосовой ввод**    | Нажми `Ctrl+Win`, говори, отпусти — текст появится в нужном месте |
+| 💡 **Голосовые заметки** | `Ctrl+Win+Alt` — запись идеи/заметки отдельным потоком            |
+| 🤖 **LLM-постобработка** | Автоисправление пунктуации, грамматики через Groq/OpenAI          |
+| 🔗 **N8N Webhook**       | Заметки автоматически улетают на ваш N8N workflow                 |
+| 📋 **Clipboard**         | Распознанный текст сразу в буфер + автовставка                    |
+| 📜 **История**           | Последние 50 записей с raw/processed вариантами                   |
+| 🔄 **Crash Recovery**    | Аудио сохраняется и переобрабатывается после сбоя                 |
+| ⚡ **Ускорение x2**      | Опциональное ускорение аудио для экономии API-трафика             |
+| 🎛️ **Выбор микрофона**   | Любое аудиоустройство в настройках                                |
+| 🪟 **Портативность**     | Один `.exe`, без инсталляции, без прав администратора             |
+
+---
+
+## ⌨️ Горячие клавиши
+
+| Клавиши                       | Действие                                                                    |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| `Ctrl + Win` (удержать)       | Начать запись речи → отпустить = транскрибировать и вставить                |
+| `Ctrl + Win + Alt` (удержать) | Записать голосовую заметку (идею) → отправить на N8N или сохранить в список |
+| `Esc`                         | Отменить текущую запись                                                     |
+| `Ctrl + Alt + S`              | Показать/скрыть главное окно                                                |
+
+> Все горячие клавиши настраиваемые — меняются в разделе «Горячие клавиши» в настройках.
+
+---
+
+## 🔗 Интеграция с N8N Webhook
+
+Самая мощная фича для автоматизации. Когда вы нажимаете `Ctrl+Win+Alt` и диктуете заметку:
+
+1. Речь транскрибируется и обрабатывается LLM.
+2. Результат отправляется POST-запросом на указанный N8N Webhook URL.
+3. N8N может записать в Notion, отправить в Telegram, создать задачу в Jira — что угодно.
+
+### Настройка:
+
+1. В N8N создайте Workflow с триггером **Webhook**.
+2. Скопируйте URL вида `https://your-n8n.example.com/webhook/abc123`.
+3. В VoiceCapture откройте ⚙️ Настройки → раздел **«Интеграции»**.
+4. Вставьте URL в поле **«Webhook N8N (конечная точка)»**.
+5. Сохраните.
+
+### Что приходит на Webhook:
+
+```json
+{
+  "text": "Текст распознанной и обработанной заметки",
+  "timestamp": "2026-03-15T10:30:00.000000",
+  "source": "VoiceCapture"
+}
+```
+
+### Поведение при заполненном Webhook:
+
+- Список идей в главном окне **скрывается** — всё уходит на сервер.
+- При записи статус показывает **«Запись → N8N Webhook...»**.
+- После отправки появляется ✅ **«Отправлено на N8N Webhook»** или ❌ при ошибке (5 сек).
+- При пустом поле Webhook — обычный режим: список идей в окне + `logs/ideas.log`.
+
+---
+
+## ⚙️ Настройка
+
+### Получение бесплатного Groq API ключа
+
+Groq — самый быстрый вариант с щедрым бесплатным планом:
+
+1. Зайдите на [console.groq.com](https://console.groq.com).
+2. Зарегистрируйтесь / войдите.
+3. В разделе **«API Keys»** создайте новый ключ.
+4. Вставьте в VoiceCapture: ⚙️ → **Groq API key**.
+
+### Описание всех настроек
+
+| Раздел                   | Параметр         | Описание                                                               |
+| ------------------------ | ---------------- | ---------------------------------------------------------------------- |
+| **Аудио**                | Микрофон         | Выбор устройства ввода                                                 |
+| **Аудио**                | Ускорение x2     | Ускоряет аудио перед отправкой (меньше трафика)                        |
+| **Сервис распознавания** | Backend          | Groq или OpenAI                                                        |
+| **Сервис распознавания** | API Key          | Ключ выбранного провайдера                                             |
+| **Сервис распознавания** | OpenAI Base URL  | Custom endpoint (совместимые API: LM Studio, vLLM)                     |
+| **Горячие клавиши**      | Запись           | По умолчанию `ctrl+win`                                                |
+| **Горячие клавиши**      | Запись идеи      | По умолчанию `ctrl+win+alt`                                            |
+| **Модели ASR**           | Groq ASR model   | По умолчанию `whisper-large-v3`                                        |
+| **Модели ASR**           | OpenAI ASR model | По умолчанию `whisper-1`                                               |
+| **Постобработка**        | Включить         | Вкл/выкл LLM-коррекции                                                 |
+| **Постобработка**        | Сервис           | Groq или OpenAI для LLM                                                |
+| **Постобработка**        | Модели           | LLM-модели для коррекции                                               |
+| **Постобработка**        | System Prompt    | Инструкция для LLM (можно попросить переводить, писать в стиле и т.д.) |
+| **Интеграции**           | Webhook N8N      | URL конечной точки N8N для голосовых заметок                           |
+
+---
+
+## 🏗️ Архитектура
+
+```
+voice2.0/
+├── src/
+│   ├── main.py                  # App класс, оркестратор
+│   ├── config/
+│   │   └── settings.py          # Датаклассы настроек, load/save YAML
+│   ├── audio/
+│   │   └── recorder.py          # Запись через sounddevice
+│   ├── hotkey/
+│   │   └── hotkey_manager.py    # Глобальные хоткеи через keyboard
+│   ├── recognition/
+│   │   ├── groq_api.py          # Groq Whisper транскрибация
+│   │   ├── openai_api.py        # OpenAI Whisper транскрибация
+│   │   └── postprocessor.py     # LLM постобработка текста
+│   ├── clipboard/
+│   │   └── clipboard_manager.py # Копирование и вставка
+│   ├── ui/
+│   │   ├── floating_window.py   # Главное плавающее окно
+│   │   ├── settings_dialog.py   # Диалог настроек
+│   │   ├── history_dialog.py    # Окно истории
+│   │   └── system_tray.py       # Системный трей
+│   └── utils/
+│       ├── history.py           # История распознаваний
+│       ├── recovery.py          # Восстановление после сбоя
+│       └── logger.py            # Настройка loguru
+├── config.yaml                  # Конфиг (создаётся автоматически, в .gitignore)
+├── build_exe.py                 # Сборка в .exe через PyInstaller
+└── requirements.txt
+```
+
+### Ключевые решения:
+
+- **Один файл конфига** — `config.yaml` в корне проекта/рядом с `.exe`. Нет `config.local.yaml`, нет нескольких файлов.
+- **Каскад backend'ов** — если Groq недоступен, автоматически пробует OpenAI (и наоборот), до 5 попыток.
+- **Webhook в daemon-потоке** — отправка на N8N не блокирует UI и основную обработку.
+- **Безопасные сигналы Qt** — все обращения к UI из воркер-потоков через `pyqtSignal`.
+- **PyInstaller onefile** — все зависимости упакованы в один `.exe`, включая SSL-сертификаты (certifi).
+
+---
+
+## 🛠️ Сборка из исходников
+
+Требования: **Python 3.12+**, Windows 10/11.
+
+```bash
+# Клонируем репозиторий
+git clone https://github.com/your-repo/voice2.0.git
+cd voice2.0
+
+# Устанавливаем зависимости
+pip install -r requirements.txt
+
+# Запуск в dev-режиме
+python src/main.py
+
+# Сборка в .exe
+python build_exe.py
+# Готовый файл: dist/VoiceCapture.exe
+```
+
+### Зависимости (requirements.txt)
+
+| Пакет                   | Назначение                      |
+| ----------------------- | ------------------------------- |
+| `PyQt6`                 | GUI                             |
+| `sounddevice` + `numpy` | Запись аудио                    |
+| `keyboard`              | Глобальные хоткеи               |
+| `groq` + `openai`       | API клиенты                     |
+| `loguru`                | Логирование                     |
+| `pyyaml`                | Конфиг                          |
+| `pyperclip`             | Clipboard                       |
+| `certifi`               | SSL-сертификаты для PyInstaller |
+
+---
+
+## 📋 Changelog
+
+### v2.3.0 (текущая)
+
+- **🔗 N8N Webhook интеграция:** В настройках (раздел «Интеграции») можно указать URL Webhook N8N. При нажатии `Ctrl+Win+Alt` голосовая заметка транскрибируется и автоматически отправляется POST-запросом на указанный URL.
+- **🔄 Webhook mode:** Если Webhook заполнен — список идей в главном окне скрывается, результат идёт только на сервер. Показывается статус ✅/❌.
+- **📍 Статус записи:** При записи идеи/Webhook показывается «Запись → N8N Webhook...» или «Запись идеи...» вместо обычного «Запись...».
+- **🐛 Исправлено мигание** при нажатии `Ctrl+Win+Alt` — надпись больше не мигает при добавлении Alt к зажатым Ctrl+Win. Фикс в `hotkey_manager.py`: `_handle_release()` теперь проверяет, что Ctrl+Win действительно отпущены, прежде чем останавливать запись.
+
+### v2.2.7
+- **Исправлена ошибка SSL:** Исправлена проблема с SSL-сертификатами при работе собранного exe-файла.
+
+### v2.2.6
+- **Улучшение интерфейса:** Если отключен постпроцессинг (LLM), второе текстовое поле скрывается.
+
+### v2.2.5
+- **Обслуживание:** Кнопка очистки папки RECOVERY в настройках.
+- **Баг-фикс:** Пустые аудиофайлы больше не накапливаются.
+
+### v2.2.4
+- **Сохранение размера окна:** Размер запоминается между сессиями.
+
+### v2.2.3
+- **Фильтрация галлюцинаций LLM:** Фразы-заглушки («Продолжение следует...») игнорируются.
+
+### v2.2.2
+- **Пустой ввод:** Если распознавание вернуло пустой текст — показывается заглушка.
+
+### v2.2.1
+- **Исправление зависаний:** Устранена критическая ошибка зависания при быстрых хоткеях.
+
+### v2.2.0
+- **История распознаваний:** Кнопка 🕒 — последние 50 записей с копированием.
+
+### v2.1.2
+- **Изменение размера окна:** Уголок resize в правом нижнем углу.
+
+### v2.1.1
+- **Настраиваемый System Prompt:** Поле для редактирования инструкции LLM в настройках.
+
+### v2.1.0
+- Поддержка Groq API.
+
+---
+
+## 🤝 Contributing
+
+Pull requests приветствуются. Для крупных изменений — сначала откройте Issue для обсуждения.
+
+1. Fork репозитория.
+2. Создайте feature-ветку: `git checkout -b feature/my-feature`.
+3. Commit: `git commit -m 'Add my feature'`.
+4. Push: `git push origin feature/my-feature`.
+5. Откройте Pull Request.
+
+---
+
+## 📄 Лицензия
+
+MIT License. Делайте что хотите.
+
+---
+
+# VoiceCapture 2.3.0 (English)
+
+**VoiceCapture** is a portable open-source voice typing utility for Windows. Records speech, transcribes via cloud APIs (Groq, OpenAI Whisper), improves text via LLM, and automatically pastes the result into the active field. Supports n8n Webhook integration for automating voice note processing.
 
 ## Features
 
-*   **SSL Certificate Fix:** Fixed an issue with SSL certificates when running the built exe file. API requests to Groq and OpenAI now work correctly.
-*   **RECOVERY Cleanup:** Added a button in settings to manually clear the temporary files folder.
-*   **Smart File Management:** Empty audio files are no longer saved, and corrupted recordings are automatically deleted on startup.
-*   **Window Size Persistence:** The application now remembers its window size. If you resize it, the dimensions are saved and restored on the next launch.
-*   **Stability:** Fixed application freeze issue when quickly toggling hotkeys.
-*   **Recognition History:** Convenient view of the last 50 recordings with the ability to copy raw and processed text.
-*   **Portability:** Runs from a single executable file, no installation required.
-*   **Crash Recovery:** Automatic saving and recovery of recordings in case of crashes.
-*   **x2 Speedup:** Automatic audio speedup to save traffic and speed up recognition.
-*   **Microphone Selection:** Ability to select a specific input device in settings.
-*   **Cloud Recognition:** Support for Groq (Whisper) and OpenAI (Whisper).
-*   **Post-processing:** Automatic text improvement using LLM (punctuation correction, style, etc.).
-*   **Global Hotkeys:** Convenient recording control from any application.
-*   **Clipboard:** Automatic copying and pasting of recognized text.
+- 🎙️ **Voice Input:** Hold `Ctrl+Win`, speak, release — text appears where you need it.
+- 💡 **Voice Notes:** `Ctrl+Win+Alt` — records an idea/note in a separate flow.
+- 🤖 **LLM Post-processing:** Auto-corrects punctuation, grammar via Groq/OpenAI.
+- 🔗 **N8N Webhook:** Notes automatically fly to your N8N workflow.
+- 📋 **Clipboard:** Recognized text goes straight to clipboard + auto-paste.
+- 📜 **History:** Last 50 recordings with raw/processed variants.
+- 🔄 **Crash Recovery:** Audio is saved and reprocessed after a crash.
+- ⚡ **x2 Speedup:** Optional audio speedup to save API traffic.
+- 🎛️ **Microphone Selection:** Any audio device in settings.
+- 🪟 **Portable:** Single `.exe`, no installation, no admin rights required.
+
+## N8N Webhook Integration
+
+When you press `Ctrl+Win+Alt` and dictate a note:
+
+1. Speech is transcribed and processed by LLM.
+2. Result is sent as a POST request to the specified N8N Webhook URL.
+3. N8N can write to Notion, send to Telegram, create a task in Jira — anything.
+
+**Payload sent to Webhook:**
+```json
+{
+  "text": "Transcribed and processed note text",
+  "timestamp": "2026-03-15T10:30:00.000000",
+  "source": "VoiceCapture"
+}
+```
+
+**Setup:** Settings (⚙️) → **Integrations** → **N8N Webhook (endpoint)** → paste your webhook URL.
 
 ## Changelog
 
+### v2.3.0
+- **N8N Webhook integration:** Voice notes are automatically sent to N8N webhook URL (configurable in Settings → Integrations).
+- **Webhook mode:** When webhook is set, the ideas list is hidden; results go to server only. Shows ✅/❌ status.
+- **Recording status:** Shows "Recording → N8N Webhook..." or "Recording idea..." instead of generic "Recording...".
+- **Fixed flickering** when pressing `Ctrl+Win+Alt` — status label no longer flickers when adding Alt to held Ctrl+Win.
+
 ### v2.2.7
-*   **SSL Certificate Fix:** Fixed an issue with SSL certificates when running the built exe file. API requests to Groq and OpenAI now work correctly.
+- SSL certificate fix for built exe file.
 
 ### v2.2.6
-*   **UI Improvement:** If post-processing (LLM) is disabled in settings, the second text field in the main window is completely hidden to save space.
+- UI: second text field hidden when post-processing is disabled.
 
 ### v2.2.5
-*   **Maintenance & Stability:**
-    *   Added "Clear RECOVERY folder" button in settings.
-    *   Fixed bug with empty audio files accumulation.
-    *   Implemented automatic cleanup of corrupted recovery files on startup.
+- Added "Clear RECOVERY folder" button in settings.
+- Fixed empty audio files accumulation.
 
 ### v2.2.4
-*   **Window Size Persistence:** Implemented automatic saving of the main window dimensions. When resized (via the bottom-right grip), the new size is saved to `config.yaml` and restored upon restart.
+- Window size is now saved between sessions.
 
 ### v2.2.3
-*   **LLM Hallucination Filtering:** Placeholder phrases like “To be continued...” or “Субтитры сделал DimaTorzok” (common LLM artifacts on empty input) are now completely ignored. They are no longer added to the clipboard or pasted.
+- LLM hallucination filtering (placeholder phrases are ignored).
 
 ### v2.2.2
-*   **Empty input / placeholder:** If recognition returns empty text, the app shows “To be continued...”.
+- Empty input placeholder.
 
 ### v2.2.1
-*   **Freeze Fix:** Fixed a critical bug that caused the application to freeze when quickly pressing hotkeys (Ctrl+Win) or their combinations. Optimized recording and processing threads.
+- Fixed critical freeze bug on rapid hotkey presses.
 
 ### v2.2.0
-*   **Recognition History:** Added a "History" button (🕒) to the main window. You can now view the last 50 recordings, see both raw and processed text, and copy either version.
-*   **UI Improvements:** The history window is designed in a dark theme and supports scrolling.
-
-### v2.1.3
-*   **Recovery Bug Fix:** Fixed an issue where the recovery folder was not created automatically on first run.
+- Recognition history with 🕒 button.
 
 ### v2.1.2
-*   **Window Resizing:** Added the ability to resize the main window (drag the bottom right corner).
-*   **Improved Logging:** Logs are now written in reverse order (newest entries at the top) and are automatically truncated when they reach 1 MB to save space.
+- Window resizing via bottom-right corner grip.
 
 ### v2.1.1
-*   **Configurable System Prompt:** Added a field in settings to edit the LLM system prompt. You can now flexibly configure post-processing instructions (e.g., set style, ask for translation, etc.) without changing the code.
+- Configurable LLM system prompt in settings.
 
 ### v2.1.0
-*   Added Groq API support.
-*   Improved settings interface.
-
-## Installation and Launch
-
-1.  Download the `VoiceCapture.exe` executable file.
-2.  Run the file.
-3.  On first launch, open settings (gear icon) and enter the API key for the selected service (Groq or OpenAI).
-
-### Getting Groq API Key (Free)
-
-Groq provides generous free tiers for developers. This is a great way to start using the app for free.
-
-1.  Go to [console.groq.com](https://console.groq.com).
-2.  Sign up or log in.
-3.  Create a new API key in the "API Keys" section.
-4.  Copy the key and paste it into VoiceCapture settings.
-
-## Usage
-
-*   **Record:** Press `Ctrl + Win` (default) to start recording. Release keys to stop.
-*   **Record Idea:** Press `Ctrl + Win + Alt` to record an "idea" (saved to a separate log).
-*   **Cancel:** Press `Esc` during recording to cancel.
-
-## Settings
-
-In settings you can change:
-*   Recognition service (Groq, OpenAI).
-*   API keys.
-*   Recognition and post-processing models.
-*   System prompt for post-processing (instructions for LLM).
-*   Hotkeys.
-*   Audio parameters (device, sample rate, etc.).
+- Groq API support added.
 
 ## Build from Source
 
-To build the portable version (exe), Python 3.12+ is required.
+Requirements: **Python 3.12+**, Windows 10/11.
 
-1.  Install dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
-2.  Run build script:
-    ```bash
-    python build_exe.py
-    ```
-3.  The finished file will be in the `dist` folder.
+```bash
+git clone https://github.com/your-repo/voice2.0.git
+cd voice2.0
+pip install -r requirements.txt
+
+# Run in dev mode
+python src/main.py
+
+# Build .exe
+python build_exe.py
+# Output: dist/VoiceCapture.exe
+```
+
+## License
+
+MIT License.

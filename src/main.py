@@ -40,6 +40,8 @@ class App(QObject):
     text_updated = pyqtSignal(str, str)
     idea_added = pyqtSignal(str)
     show_window_signal = pyqtSignal()
+    webhook_status = pyqtSignal(bool)  # True = success, False = error
+    idea_recording_started = pyqtSignal(bool)  # bool = webhook_mode
 
     """
     Main application class: wires UI, hotkeys, audio recorder, recognizer and clipboard.
@@ -170,6 +172,11 @@ class App(QObject):
         self.text_updated.connect(self._on_text_updated)
         self.idea_added.connect(self.window.add_idea)
         self.show_window_signal.connect(self.show_window)
+        self.webhook_status.connect(self.window.show_webhook_status)
+        self.idea_recording_started.connect(self.window.show_idea_recording_status)
+
+        # Устанавливаем webhook mode если URL задан
+        self._apply_webhook_mode()
 
         # Check for recovery files on startup
         self._check_recovery_files()
@@ -269,6 +276,9 @@ class App(QObject):
         # Обновляем состояние постпроцессинга в окне
         self.window.set_postprocess_enabled(self.settings.postprocess.enabled)
 
+        # Обновляем webhook mode
+        self._apply_webhook_mode()
+
         self.window.show_message("Настройки сохранены.", timeout_ms=1500)
 
     # ----------------------------------------------------------------- Hotkeys
@@ -344,13 +354,17 @@ class App(QObject):
     def start_idea_recording(self) -> None:
         """Starts a recording that is immediately flagged as an idea."""
         self.start_recording(is_idea=True)
+        # Обновляем статус-текст после начала записи (через сигнал — потокобезопасно)
+        webhook_url = (self.settings.integrations.n8n_webhook_url or "").strip()
+        self.idea_recording_started.emit(bool(webhook_url))
 
     def convert_to_idea(self) -> None:
         """If a recording is in progress, flag it as an idea."""
-        if self._is_recording:
+        if self._is_recording and not self._is_idea:
             self._is_idea = True
-            # Optionally, provide some visual feedback
-            self.message_shown.emit("Запись будет добавлена в идеи", 1000)
+            webhook_url = (self.settings.integrations.n8n_webhook_url or "").strip()
+            self.idea_recording_started.emit(bool(webhook_url))
+            logger.debug("Recording converted to idea")
 
     def cancel_recording(self) -> None:
         if self._is_recording:
@@ -515,10 +529,16 @@ class App(QObject):
                 # Save to history
                 self.history_manager.add_item(raw_text or "", processed_text or "")
 
-                # 7) если это была идея, добавить в список идей
+                # 7) если это была идея — отправить на webhook или добавить в список идей
                 if is_idea:
-                    self.idea_added.emit(processed_text or "")
-                    self._log_idea(processed_text or "")
+                    webhook_url = (self.settings.integrations.n8n_webhook_url or "").strip()
+                    if webhook_url:
+                        # Webhook mode: только отправляем, не добавляем в локальный список
+                        self._send_to_n8n_webhook(processed_text or "")
+                    else:
+                        # Обычный режим: добавляем в список идей + лог
+                        self.idea_added.emit(processed_text or "")
+                        self._log_idea(processed_text or "")
 
                 # 8) сохранить распознавание в отдельный текстовый лог (новые сверху, макс 1 МБ)
                 try:
@@ -582,6 +602,43 @@ class App(QObject):
                 self.message_shown.emit("Неизвестная ошибка постобработки. См. логи.", 3000)
         finally:
             self._processing_lock.release()
+
+    def _apply_webhook_mode(self) -> None:
+        """Включает/выключает webhook mode в окне в зависимости от настроек."""
+        webhook_url = (self.settings.integrations.n8n_webhook_url or "").strip()
+        self.window.set_webhook_mode(bool(webhook_url))
+
+    def _send_to_n8n_webhook(self, text: str) -> None:
+        """Отправляет текст заметки на N8N Webhook, если URL задан в настройках."""
+        webhook_url = (self.settings.integrations.n8n_webhook_url or "").strip()
+        if not webhook_url:
+            return
+
+        def _do_send():
+            try:
+                import urllib.request
+                import json as _json
+
+                payload = _json.dumps({
+                    "text": text,
+                    "timestamp": __import__("datetime").datetime.now().isoformat(),
+                    "source": "VoiceCapture",
+                }).encode("utf-8")
+
+                req = urllib.request.Request(
+                    webhook_url,
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    logger.info("N8N webhook response: {} {}", resp.status, resp.reason)
+                self.webhook_status.emit(True)
+            except Exception as exc:
+                logger.error("Failed to send idea to N8N webhook: {}", exc)
+                self.webhook_status.emit(False)
+
+        threading.Thread(target=_do_send, daemon=True).start()
 
     def _log_idea(self, text: str):
         """Appends an idea to the ideas.log file (newest at top, max 1MB)."""
@@ -748,6 +805,9 @@ class App(QObject):
                 "logging": {
                     "level": "INFO",
                     "log_dir": "logs",
+                },
+                "integrations": {
+                    "n8n_webhook_url": "",
                 },
             }
 

@@ -208,9 +208,23 @@ class HotKeyManager:
     def _handle_release(self) -> None:
         """
         Вызывается при отпускании модификаторов.
-        Мы просто дергаем оба release-колбэка.
-        App сам проверит, какой режим был активен, и остановит нужный.
+        Проверяем, что комбинация ДЕЙСТВИТЕЛЬНО разорвана (хотя бы одна
+        ключевая клавиша отпущена), прежде чем слать release.
+        Это предотвращает мигание при нажатии Ctrl+Win+Alt.
         """
+        # Проверяем, что хотя бы Ctrl или Win отпущены
+        # (если только Alt отпущен, но Ctrl+Win ещё зажаты — запись продолжается)
+        try:
+            ctrl_pressed = keyboard.is_pressed('ctrl')
+            win_pressed = keyboard.is_pressed('left windows') or keyboard.is_pressed('right windows')
+        except Exception:
+            ctrl_pressed = False
+            win_pressed = False
+
+        # Если Ctrl+Win всё ещё зажаты — не останавливаем запись
+        if ctrl_pressed and win_pressed:
+            return
+
         try:
             self.callbacks.on_record_release()
         except Exception:

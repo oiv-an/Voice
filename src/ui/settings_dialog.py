@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
 import sounddevice as sd
 from loguru import logger
  
-from config.settings import AppSettings, RecognitionConfig, HotkeysConfig
+from config.settings import AppSettings, RecognitionConfig, HotkeysConfig, IntegrationsConfig
 
 
 class SettingsDialog(QDialog):
@@ -208,6 +208,23 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(post_group)
 
+        # === Блок: Интеграции (n8n webhook) ====================================
+        integrations_group = QGroupBox("Интеграции")
+        integrations_form = QFormLayout(integrations_group)
+
+        self.n8n_webhook_edit = QLineEdit()
+        self.n8n_webhook_edit.setPlaceholderText("https://your-n8n.example.com/webhook/...")
+        integrations_form.addRow("Webhook N8N (конечная точка):", self.n8n_webhook_edit)
+
+        hint_label = QLabel(
+            "Если заполнено — при записи идеи (Ctrl+Win+Alt) текст будет отправлен на этот Webhook."
+        )
+        hint_label.setWordWrap(True)
+        hint_label.setStyleSheet("color: #aaaaaa; font-size: 11px;")
+        integrations_form.addRow(hint_label)
+
+        layout.addWidget(integrations_group)
+
         # === Кнопки ============================================================
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -298,6 +315,9 @@ class SettingsDialog(QDialog):
 
         self.prompt_edit.setPlainText(settings.postprocess.prompt)
 
+        # Integrations
+        self.n8n_webhook_edit.setText(settings.integrations.n8n_webhook_url)
+
         # раньше здесь вызывался _on_backend_changed(), который скрывал поля ключей.
         # теперь все поля всегда видимы, поэтому вызов не нужен.
         # self._on_backend_changed()
@@ -370,12 +390,18 @@ class SettingsDialog(QDialog):
             ),
         )
 
+        new_integrations = replace(
+            old.integrations,
+            n8n_webhook_url=self.n8n_webhook_edit.text().strip(),
+        )
+
         return replace(
             old,
             hotkeys=new_hotkeys,
             audio=new_audio,
             recognition=new_recognition,
             postprocess=new_postprocess,
+            integrations=new_integrations,
         )
 
     # ------------------------------------------------------------------ slots

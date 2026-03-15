@@ -213,6 +213,7 @@ class FloatingWindow(QWidget):
         # Добавляем список идей в layout
         normal_layout.addWidget(self.ideas_scroll)
         normal_layout.addWidget(self.clear_ideas_button, alignment=Qt.AlignmentFlag.AlignRight)
+        normal_layout.addWidget(self.webhook_status_label)
 
         # --- Страница для компактного режима ---
         self.compact_page = QWidget()
@@ -400,6 +401,18 @@ class FloatingWindow(QWidget):
         """)
         self.clear_ideas_button.clicked.connect(self._clear_all_ideas)
         self.clear_ideas_button.hide()
+
+        # --- Статус отправки на webhook ---
+        self.webhook_status_label = QLabel("")
+        self.webhook_status_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.webhook_status_label.setWordWrap(True)
+        self.webhook_status_label.setStyleSheet(
+            "color: rgba(100, 255, 100, 0.9); font-size: 10pt; background: transparent; border: none; padding: 4px 8px;"
+        )
+        self.webhook_status_label.hide()
+
+        # Флаг: webhook mode (скрывает список идей, показывает статус)
+        self._webhook_mode: bool = False
 
         self.status_text_label = QLabel("")
         self.status_text_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
@@ -599,14 +612,13 @@ class FloatingWindow(QWidget):
         self.processed_label.setText(text or "")
 
     def add_idea(self, text: str) -> None:
-        """Добавить новую идею в список."""
+        """Добавить новую идею в список. Если webhook mode — ничего не добавляем."""
+        if self._webhook_mode:
+            return
         if not text.strip():
             return
             
         item = IdeaItemWidget(text)
-        # Добавляем в начало списка (insertWidget(0, ...)) или в конец (addWidget)
-        # Пользователь просил "каждая новая добавляется в список". Обычно новые снизу, но для заметок часто удобно сверху.
-        # Сделаем добавление вниз, как в чатах.
         self.ideas_layout.addWidget(item)
         
         self.ideas_scroll.show()
@@ -616,6 +628,39 @@ class FloatingWindow(QWidget):
         QTimer.singleShot(100, lambda: self.ideas_scroll.verticalScrollBar().setValue(
             self.ideas_scroll.verticalScrollBar().maximum()
         ))
+
+    def show_idea_recording_status(self, webhook_mode: bool = False) -> None:
+        """Показать статус записи идеи (или webhook-записи)."""
+        if webhook_mode:
+            self.status_text_label.setText("Запись → N8N Webhook...")
+            self.status_text_label_compact.setText("Запись → N8N...")
+        else:
+            self.status_text_label.setText("Запись идеи...")
+            self.status_text_label_compact.setText("Запись идеи...")
+
+    def set_webhook_mode(self, enabled: bool) -> None:
+        """Включить/выключить режим webhook (скрывает список идей)."""
+        self._webhook_mode = enabled
+        if enabled:
+            self.ideas_scroll.hide()
+            self.clear_ideas_button.hide()
+        self.webhook_status_label.hide()
+
+    def show_webhook_status(self, success: bool) -> None:
+        """Показать статус отправки на webhook."""
+        if success:
+            self.webhook_status_label.setText("✅ Отправлено на N8N Webhook")
+            self.webhook_status_label.setStyleSheet(
+                "color: rgba(100, 255, 100, 0.9); font-size: 10pt; background: transparent; border: none; padding: 4px 8px;"
+            )
+        else:
+            self.webhook_status_label.setText("❌ Ошибка отправки на N8N Webhook")
+            self.webhook_status_label.setStyleSheet(
+                "color: rgba(255, 100, 100, 0.9); font-size: 10pt; background: transparent; border: none; padding: 4px 8px;"
+            )
+        self.webhook_status_label.show()
+        # Скрываем через 5 секунд
+        QTimer.singleShot(5000, self.webhook_status_label.hide)
 
     def _clear_all_ideas(self) -> None:
         """Очистить весь список идей."""

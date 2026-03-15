@@ -15,7 +15,7 @@ import yaml
 @dataclass
 class AppInfoConfig:
     name: str = "VoiceCapture"
-    version: str = "2.2.6"
+    version: str = "2.3.0"
     language: str = "ru"
     debug: bool = False
 
@@ -112,6 +112,11 @@ class LoggingConfig:
 
 
 @dataclass
+class IntegrationsConfig:
+    n8n_webhook_url: str = ""
+
+
+@dataclass
 class AppSettings:
     app: AppInfoConfig
     hotkeys: HotkeysConfig
@@ -120,6 +125,7 @@ class AppSettings:
     postprocess: PostprocessConfig
     ui: UIConfig
     logging: LoggingConfig
+    integrations: IntegrationsConfig = field(default_factory=IntegrationsConfig)
 
     # ------------------------------------------------------------------ factory
 
@@ -170,6 +176,7 @@ class AppSettings:
                 },
                 "ui": UIConfig().__dict__,
                 "logging": LoggingConfig().__dict__,
+                "integrations": IntegrationsConfig().__dict__,
             }
             try:
                 with config_path.open("w", encoding="utf-8") as f:
@@ -184,6 +191,7 @@ class AppSettings:
                     postprocess=PostprocessConfig(),
                     ui=UIConfig(),
                     logging=LoggingConfig(),
+                    integrations=IntegrationsConfig(),
                 )
 
         with config_path.open("r", encoding="utf-8") as f:
@@ -252,6 +260,11 @@ class AppSettings:
             logging_raw.pop(k, None)
         logging_cfg = LoggingConfig(**logging_raw)
 
+        # Integrations
+        integrations_cfg = IntegrationsConfig(
+            **get_section("integrations", IntegrationsConfig().__dict__)
+        )
+
         return cls(
             app=app_cfg,
             hotkeys=hotkeys_cfg,
@@ -260,6 +273,7 @@ class AppSettings:
             postprocess=postprocess_cfg,
             ui=ui_cfg,
             logging=logging_cfg,
+            integrations=integrations_cfg,
         )
 
     # ------------------------------------------------------------------ save
@@ -303,6 +317,7 @@ class AppSettings:
             },
             "ui": settings.ui.__dict__,
             "logging": settings.logging.__dict__,
+            "integrations": settings.integrations.__dict__,
         }
 
         with config_path.open("w", encoding="utf-8") as f:
