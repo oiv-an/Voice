@@ -8,7 +8,7 @@
 
 ## 🚀 Быстрый старт
 
-1. Скачайте `VoiceCapture.exe` из раздела [Releases](https://github.com/your-repo/releases).
+1. Скачайте `VoiceCapture.exe` из раздела [Releases](https://github.com/oiv-an/Voice/releases).
 2. Запустите файл — установка не требуется.
 3. Откройте настройки (⚙️) и введите API-ключ Groq или OpenAI.
 4. Зажмите `Ctrl + Win` — говорите — отпустите. Текст вставится сам.
@@ -160,7 +160,7 @@ voice2.0/
 
 ```bash
 # Клонируем репозиторий
-git clone https://github.com/your-repo/voice2.0.git
+git clone https://github.com/oiv-an/Voice.git
 cd voice2.0
 
 # Устанавливаем зависимости
@@ -335,7 +335,7 @@ When you press `Ctrl+Win+Alt` and dictate a note:
 Requirements: **Python 3.12+**, Windows 10/11.
 
 ```bash
-git clone https://github.com/your-repo/voice2.0.git
+git clone https://github.com/oiv-an/Voice.git
 cd voice2.0
 pip install -r requirements.txt
 
