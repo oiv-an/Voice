@@ -130,8 +130,13 @@ class OpenRouterRecognizer:
         )
 
         try:
-            # Таймаут ASR должен быть достаточно щедрым — аудио может быть крупным
-            resp = httpx.post(url, headers=headers, json=payload, timeout=60.0)
+            # Раздельные таймауты:
+            # - connect: 5 сек (если прокси недоступен — быстро падаем)
+            # - read: 30 сек (gemini-flash-lite обычно отвечает за 2-5 сек,
+            #   но cold-start у некоторых прокси может быть до 15-20 сек)
+            # - write/pool: 10 сек
+            timeout = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=10.0)
+            resp = httpx.post(url, headers=headers, json=payload, timeout=timeout)
         except httpx.TimeoutException as exc:
             logger.error("OpenRouter ASR timeout: {}", exc)
             raise RuntimeError("OpenRouter: превышено время ожидания ответа.") from exc
