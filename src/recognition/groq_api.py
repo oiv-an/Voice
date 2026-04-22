@@ -52,6 +52,10 @@ class GroqWhisperRecognizer:
             "model": self.config.model,
             "language": self.config.language,
         }
+        # Опциональный ASR-prompt из настроек (подсказка для Whisper).
+        prompt = (getattr(self.config, "prompt", "") or "").strip()
+        if prompt:
+            data["prompt"] = prompt
 
         last_exc: Exception | None = None
 

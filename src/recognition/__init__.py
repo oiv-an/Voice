@@ -6,6 +6,7 @@ from audio.recorder import AudioData
 from config.settings import RecognitionConfig
 from recognition.groq_api import GroqWhisperRecognizer
 from recognition.openai_api import OpenAIWhisperRecognizer
+from recognition.openrouter_api import OpenRouterRecognizer
 
 
 class IRecognizer(Protocol):
@@ -17,9 +18,10 @@ def create_recognizer(config: RecognitionConfig) -> IRecognizer:
     """
     Factory for recognizers.
 
-    Поддерживаем два backend'а:
-      - "groq"   — облачный Groq Whisper
-      - "openai" — облачный OpenAI Whisper
+    Поддерживаем три backend-а:
+      - "groq"       — облачный Groq Whisper (multipart /audio/transcriptions)
+      - "openai"     — облачный OpenAI Whisper (multipart /audio/transcriptions)
+      - "openrouter" — OpenRouter / совместимый прокси (chat/completions + input_audio)
     """
     backend = (config.backend or "groq").lower()
 
@@ -28,6 +30,9 @@ def create_recognizer(config: RecognitionConfig) -> IRecognizer:
 
     if backend == "openai":
         return OpenAIWhisperRecognizer(config.openai)
+
+    if backend == "openrouter":
+        return OpenRouterRecognizer(config.openrouter)
 
     # Fallback: по умолчанию Groq
     return GroqWhisperRecognizer(config.groq)

@@ -15,7 +15,7 @@ import yaml
 @dataclass
 class AppInfoConfig:
     name: str = "VoiceCapture"
-    version: str = "2.3.0"
+    version: str = "2.4.0"
     language: str = "ru"
     debug: bool = False
 
@@ -49,6 +49,8 @@ class OpenAIRecognitionConfig:
     model_process: str = "gpt-5.1"
     language: str = "ru"
     base_url: str = ""  # URL всегда задаётся только в config.yaml / настройках
+    # Опциональный ASR-prompt, который передаётся вместе с аудио в Whisper.
+    prompt: str = ""
 
 
 @dataclass
@@ -58,13 +60,36 @@ class GroqRecognitionConfig:
     # Модель для постобработки текста (LLM) — одно поле рядом с моделью распознавания.
     model_process: str = "moonshotai/kimi-k2-instruct"
     language: str = "ru"
+    # Опциональный ASR-prompt, который передаётся вместе с аудио в Groq Whisper.
+    prompt: str = ""
+
+
+@dataclass
+class OpenRouterRecognitionConfig:
+    """
+    Конфиг распознавания через OpenRouter.
+
+    ВАЖНО: OpenRouter не использует whisper /audio/transcriptions.
+    Аудио передаётся как input_audio (base64) внутри chat/completions.
+    Ни api_key, ни base_url не зашиваются в код — всё задаётся в настройках.
+    """
+    api_key: str = ""
+    model: str = "google/gemini-3.1-flash-lite-preview"
+    language: str = "ru"
+    base_url: str = ""  # Например: https://openrouter.ai/api/v1 или корпоративный прокси
+    prompt: str = ""     # Инструкция модели, что и как распознавать
+    # В каком формате кодировать аудио перед base64.
+    # По умолчанию ogg (Vorbis) — сильное сжатие, всегда доступно через libsndfile.
+    # Допустимые значения: ogg, mp3, wav.
+    audio_format: str = "ogg"
 
 
 @dataclass
 class RecognitionConfig:
-    backend: str = "groq"  # openai, groq
+    backend: str = "groq"  # openai, groq, openrouter
     openai: OpenAIRecognitionConfig = field(default_factory=OpenAIRecognitionConfig)
     groq: GroqRecognitionConfig = field(default_factory=GroqRecognitionConfig)
+    openrouter: OpenRouterRecognitionConfig = field(default_factory=OpenRouterRecognitionConfig)
 
 
 # Блоки постпроцессинга больше не хранят свои ключи — только для обратной
@@ -164,6 +189,7 @@ class AppSettings:
                     "backend": RecognitionConfig().backend,
                     "openai": OpenAIRecognitionConfig().__dict__,
                     "groq": GroqRecognitionConfig().__dict__,
+                    "openrouter": OpenRouterRecognitionConfig().__dict__,
                 },
                 "postprocess": {
                     "enabled": PostprocessConfig().enabled,
@@ -212,6 +238,7 @@ class AppSettings:
         rec_raw = raw.get("recognition", {}) or {}
         openai_raw_rec = rec_raw.get("openai", {}) or {}
         groq_raw_rec = rec_raw.get("groq", {}) or {}
+        openrouter_raw_rec = rec_raw.get("openrouter", {}) or {}
 
         recognition_cfg = RecognitionConfig(
             backend=rec_raw.get("backend", "groq"),
@@ -220,6 +247,9 @@ class AppSettings:
             ),
             groq=GroqRecognitionConfig(
                 **{**GroqRecognitionConfig().__dict__, **groq_raw_rec}
+            ),
+            openrouter=OpenRouterRecognitionConfig(
+                **{**OpenRouterRecognitionConfig().__dict__, **openrouter_raw_rec}
             ),
         )
 
@@ -304,6 +334,7 @@ class AppSettings:
                 "backend": settings.recognition.backend,
                 "openai": settings.recognition.openai.__dict__,
                 "groq": settings.recognition.groq.__dict__,
+                "openrouter": settings.recognition.openrouter.__dict__,
             },
             "postprocess": {
                 "enabled": settings.postprocess.enabled,

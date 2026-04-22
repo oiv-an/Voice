@@ -142,6 +142,7 @@ class SettingsDialog(QDialog):
         self.backend_combo = QComboBox()
         self.backend_combo.addItem("Groq", userData="groq")
         self.backend_combo.addItem("OpenAI", userData="openai")
+        self.backend_combo.addItem("OpenRouter", userData="openrouter")
         # выбор сервиса распознавания ничего не скрывает, сигнал больше не нужен
         backend_form.addRow("Сервис распознавания:", self.backend_combo)
 
@@ -155,6 +156,14 @@ class SettingsDialog(QDialog):
 
         self.openai_base_url_edit = QLineEdit()
         backend_form.addRow("OpenAI Base URL:", self.openai_base_url_edit)
+
+        self.openrouter_api_key_edit = QLineEdit()
+        self.openrouter_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        backend_form.addRow("OpenRouter API key:", self.openrouter_api_key_edit)
+
+        self.openrouter_base_url_edit = QLineEdit()
+        self.openrouter_base_url_edit.setPlaceholderText("https://openrouter.ai/api/v1")
+        backend_form.addRow("OpenRouter Base URL:", self.openrouter_base_url_edit)
 
         layout.addWidget(backend_group)
 
@@ -177,8 +186,35 @@ class SettingsDialog(QDialog):
         self.groq_asr_model_edit = QLineEdit()
         asr_form.addRow("Groq ASR model:", self.groq_asr_model_edit)
 
+        self.groq_asr_prompt_edit = QPlainTextEdit()
+        self.groq_asr_prompt_edit.setPlaceholderText("Опционально: подсказка для Whisper (имена, термины)...")
+        self.groq_asr_prompt_edit.setMaximumHeight(60)
+        asr_form.addRow("Groq ASR prompt:", self.groq_asr_prompt_edit)
+
         self.openai_asr_model_edit = QLineEdit()
         asr_form.addRow("OpenAI ASR model:", self.openai_asr_model_edit)
+
+        self.openai_asr_prompt_edit = QPlainTextEdit()
+        self.openai_asr_prompt_edit.setPlaceholderText("Опционально: подсказка для Whisper (имена, термины)...")
+        self.openai_asr_prompt_edit.setMaximumHeight(60)
+        asr_form.addRow("OpenAI ASR prompt:", self.openai_asr_prompt_edit)
+
+        self.openrouter_asr_model_edit = QLineEdit()
+        self.openrouter_asr_model_edit.setPlaceholderText("google/gemini-3.1-flash-lite-preview")
+        asr_form.addRow("OpenRouter ASR model:", self.openrouter_asr_model_edit)
+
+        self.openrouter_asr_prompt_edit = QPlainTextEdit()
+        self.openrouter_asr_prompt_edit.setPlaceholderText(
+            "Инструкция для модели OpenRouter: как именно распознавать аудио..."
+        )
+        self.openrouter_asr_prompt_edit.setMaximumHeight(80)
+        asr_form.addRow("OpenRouter ASR prompt:", self.openrouter_asr_prompt_edit)
+
+        self.openrouter_audio_format_combo = QComboBox()
+        self.openrouter_audio_format_combo.addItem("ogg", userData="ogg")
+        self.openrouter_audio_format_combo.addItem("mp3", userData="mp3")
+        self.openrouter_audio_format_combo.addItem("wav", userData="wav")
+        asr_form.addRow("OpenRouter audio format:", self.openrouter_audio_format_combo)
 
         layout.addWidget(asr_group)
 
@@ -275,6 +311,8 @@ class SettingsDialog(QDialog):
         self.groq_api_key_edit.setText(rec.groq.api_key)
         self.openai_api_key_edit.setText(rec.openai.api_key)
         self.openai_base_url_edit.setText(rec.openai.base_url)
+        self.openrouter_api_key_edit.setText(rec.openrouter.api_key)
+        self.openrouter_base_url_edit.setText(rec.openrouter.base_url)
 
         # Audio
         device_val = settings.audio.device
@@ -290,9 +328,21 @@ class SettingsDialog(QDialog):
         self.record_hotkey_edit.setText(settings.hotkeys.record)
         self.record_idea_hotkey_edit.setText(settings.hotkeys.record_idea)
 
-        # ASR‑модели
+        # ASR‑модели + ASR prompts
         self.groq_asr_model_edit.setText(rec.groq.model)
+        self.groq_asr_prompt_edit.setPlainText(getattr(rec.groq, "prompt", "") or "")
         self.openai_asr_model_edit.setText(rec.openai.model)
+        self.openai_asr_prompt_edit.setPlainText(getattr(rec.openai, "prompt", "") or "")
+        self.openrouter_asr_model_edit.setText(rec.openrouter.model)
+        self.openrouter_asr_prompt_edit.setPlainText(getattr(rec.openrouter, "prompt", "") or "")
+
+        # audio_format для OpenRouter
+        audio_fmt = (getattr(rec.openrouter, "audio_format", "ogg") or "ogg").lower()
+        idx_fmt = self.openrouter_audio_format_combo.findData(audio_fmt)
+        if idx_fmt == -1:
+            idx_fmt = self.openrouter_audio_format_combo.findData("ogg")
+        if idx_fmt != -1:
+            self.openrouter_audio_format_combo.setCurrentIndex(idx_fmt)
 
         # LLM‑модели (постпроцессинг)
         self.post_enabled_checkbox.setChecked(settings.postprocess.enabled)
@@ -346,11 +396,21 @@ class SettingsDialog(QDialog):
             record_idea=self.record_idea_hotkey_edit.text().strip() or old.hotkeys.record_idea,
         )
 
+        # OpenRouter-поля
+        openrouter_asr_model = self.openrouter_asr_model_edit.text().strip()
+        openrouter_audio_fmt = (
+            self.openrouter_audio_format_combo.currentData()
+            or old.recognition.openrouter.audio_format
+            or "ogg"
+        )
+
         # Обновляем recognition:
         # - ASR‑модели (model) берём из полей ASR.
+        # - ASR prompt'ы кладём в recognition.*.prompt.
         # - LLM‑модели для постпроцессинга:
         #     * Groq: пишем в recognition.groq.model_process
         #     * OpenAI: пишем в recognition.openai.model_process
+        # - OpenRouter: api_key, base_url, model, prompt, audio_format.
         new_recognition = RecognitionConfig(
             backend=backend,
             openai=replace(
@@ -359,12 +419,22 @@ class SettingsDialog(QDialog):
                 base_url=self.openai_base_url_edit.text().strip(),
                 model=openai_asr_model or old.recognition.openai.model,
                 model_process=openai_llm_model or old.recognition.openai.model_process,
+                prompt=self.openai_asr_prompt_edit.toPlainText().strip(),
             ),
             groq=replace(
                 old.recognition.groq,
                 api_key=self.groq_api_key_edit.text().strip(),
                 model=groq_asr_model or old.recognition.groq.model,
                 model_process=groq_llm_model or old.recognition.groq.model_process,
+                prompt=self.groq_asr_prompt_edit.toPlainText().strip(),
+            ),
+            openrouter=replace(
+                old.recognition.openrouter,
+                api_key=self.openrouter_api_key_edit.text().strip(),
+                base_url=self.openrouter_base_url_edit.text().strip(),
+                model=openrouter_asr_model or old.recognition.openrouter.model,
+                prompt=self.openrouter_asr_prompt_edit.toPlainText().strip(),
+                audio_format=str(openrouter_audio_fmt),
             ),
         )
 

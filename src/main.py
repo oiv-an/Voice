@@ -127,6 +127,8 @@ class App(QObject):
             missing_key = True
         elif backend == "openai" and not (self.settings.recognition.openai.api_key or "").strip():
             missing_key = True
+        elif backend == "openrouter" and not (self.settings.recognition.openrouter.api_key or "").strip():
+            missing_key = True
 
         if missing_key:
             self.window.result_label.setText(
@@ -264,6 +266,8 @@ class App(QObject):
         if backend == "groq" and (self.settings.recognition.groq.api_key or "").strip():
             has_key = True
         elif backend == "openai" and (self.settings.recognition.openai.api_key or "").strip():
+            has_key = True
+        elif backend == "openrouter" and (self.settings.recognition.openrouter.api_key or "").strip():
             has_key = True
 
         if has_key:
@@ -425,8 +429,10 @@ class App(QObject):
                 audio_duration_sec = -1.0
 
             # ------------------------ каскад backend'ов с ретраями ----------------
+            # Приоритет fallback: OpenRouter -> Groq -> OpenAI.
+            # Пользовательский выбор всегда идёт первым.
             primary = (self.settings.recognition.backend or "groq").lower()
-            all_backends = ["groq", "openai"]
+            all_backends = ["openrouter", "groq", "openai"]
             cascade = [b for b in [primary] + all_backends if b in all_backends]
             seen = set()
             ordered_backends = [b for b in cascade if not (b in seen or seen.add(b))]
@@ -773,12 +779,24 @@ class App(QObject):
                         # base_url намеренно оставляем пустым, чтобы пользователь
                         # задал его в настройках (OpenAI Base URL).
                         "base_url": "",
+                        "prompt": "",
                     },
                     "groq": {
                         "api_key": "",
                         "model": "whisper-large-v3",
                         "model_process": "moonshotai/kimi-k2-instruct",
                         "language": "ru",
+                        "prompt": "",
+                    },
+                    # OpenRouter: ни api_key, ни base_url не зашиваются.
+                    # Пользователь вводит их в настройках при первом запуске.
+                    "openrouter": {
+                        "api_key": "",
+                        "model": "google/gemini-3.1-flash-lite-preview",
+                        "language": "ru",
+                        "base_url": "",
+                        "prompt": "",
+                        "audio_format": "ogg",
                     },
                 },
                 # Блок postprocess больше не хранит ключи / base_url.
