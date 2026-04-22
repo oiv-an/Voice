@@ -25,6 +25,9 @@ dist/
 logs/
 history.json
 
+# Audio recovery files (temporary crash-recovery WAVs, never for commits)
+recovery/
+
 # Byte-compiled / optimized / DLL files
 *.pyc
 *.pyo
