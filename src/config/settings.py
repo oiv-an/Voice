@@ -35,7 +35,9 @@ class AudioConfig:
     sample_rate: int = 16000
     channels: int = 1
     format: str = "float32"
-    max_duration: int = 60
+    # Максимальная длительность одной записи в секундах.
+    # 1800 = 30 минут — достаточно для длинных диктовок.
+    max_duration: int = 1800
     vad_threshold: float = 0.5
     vad_min_duration: float = 0.1
     speedup_x2: bool = False

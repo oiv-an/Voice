@@ -70,7 +70,10 @@ def setup_logging(config: LoggingConfig) -> None:
         sink=reverse_sink,
         level=config.level.upper(),
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
-        enqueue=True, # Thread-safe
+        # enqueue=False: синхронная запись. При падении процесса очередь loguru
+        # не успевает сбросить буфер, и последние (самые важные) логи теряются.
+        # Для диагностики падений синхронная запись надёжнее.
+        enqueue=False,
         backtrace=True,
         diagnose=True,
     )

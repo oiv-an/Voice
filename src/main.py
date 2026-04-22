@@ -2,6 +2,7 @@ import sys
 import os
 import time
 import threading
+import traceback
 import re
 from pathlib import Path
 from typing import Optional
@@ -18,6 +19,45 @@ if getattr(sys, 'frozen', False):
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QApplication
 from loguru import logger
+
+
+# ---------------------------------------------------------------------------#
+# Глобальные обработчики непойманных исключений.
+# Без них любое падение в фоновом потоке (threading.Thread) приводит к
+# тихому обрыву процесса без записи в лог — особенно в PyInstaller-сборке.
+# ---------------------------------------------------------------------------#
+
+def _global_excepthook(exc_type, exc_value, exc_traceback):
+    """Ловит непойманные исключения в главном потоке."""
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    tb_text = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+    try:
+        logger.critical("UNCAUGHT EXCEPTION in main thread:\n{}", tb_text)
+    except Exception:
+        # Если даже логгер сломан — хотя бы в stderr
+        sys.__stderr__.write(f"UNCAUGHT EXCEPTION:\n{tb_text}\n")
+
+
+def _thread_excepthook(args):
+    """Ловит непойманные исключения в фоновых потоках (Python 3.8+)."""
+    tb_text = "".join(
+        traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback)
+    )
+    thread_name = args.thread.name if args.thread else "unknown"
+    try:
+        logger.critical(
+            "UNCAUGHT EXCEPTION in thread '{}':\n{}", thread_name, tb_text
+        )
+    except Exception:
+        sys.__stderr__.write(
+            f"UNCAUGHT EXCEPTION in thread '{thread_name}':\n{tb_text}\n"
+        )
+
+
+sys.excepthook = _global_excepthook
+threading.excepthook = _thread_excepthook
 
 from config.settings import AppSettings
 from ui.floating_window import FloatingWindow
@@ -336,7 +376,28 @@ class App(QObject):
                 recovery_path = None
 
             if len(processed_audio.samples) > 0:
-                thread = threading.Thread(target=self._process_audio, args=(processed_audio, final_is_idea, recovery_path))
+                # Обёртка, чтобы любое исключение в потоке точно попало в лог.
+                # Без неё threading.excepthook уже ловит падения, но логируем
+                # и здесь для надёжности.
+                def _safe_process():
+                    try:
+                        logger.info(
+                            "Starting _process_audio thread (samples={}, duration={:.2f}s)",
+                            len(processed_audio.samples),
+                            len(processed_audio.samples) / processed_audio.sample_rate,
+                        )
+                        self._process_audio(processed_audio, final_is_idea, recovery_path)
+                    except Exception as exc:
+                        logger.exception("FATAL in _process_audio thread: {}", exc)
+                        try:
+                            self.state_changed.emit("error")
+                            self.message_shown.emit(
+                                f"Критическая ошибка обработки: {exc}", 5000
+                            )
+                        except Exception:
+                            pass
+
+                thread = threading.Thread(target=_safe_process, daemon=True)
                 thread.start()
             else:
                 logger.warning("Empty audio recorded, skipping processing.")
@@ -711,22 +772,44 @@ class App(QObject):
         # Process files in a separate thread to not block UI startup
         def process_recovery():
             for filepath in files:
-                logger.info(f"Recovering file: {filepath}")
-                audio_data = self.recovery_manager.load_audio(filepath)
-                
-                # Check if file is empty or invalid
-                if not audio_data or len(audio_data.samples) == 0:
-                    logger.warning(f"Recovery file {filepath} is empty or invalid, deleting.")
-                    self.recovery_manager.cleanup(filepath)
-                    continue
+                try:
+                    logger.info(f"Recovering file: {filepath}")
+                    audio_data = self.recovery_manager.load_audio(filepath)
 
-                # We process it as a normal recording.
-                # Note: this will trigger UI updates and clipboard paste.
-                # We pass the filepath so it gets deleted on success.
-                self._process_audio(audio_data, is_idea=False, recovery_path=filepath)
-                
-                # Small delay between files
-                time.sleep(1)
+                    # Check if file is empty or invalid
+                    if not audio_data or len(audio_data.samples) == 0:
+                        logger.warning(
+                            f"Recovery file {filepath} is empty or invalid, deleting."
+                        )
+                        self.recovery_manager.cleanup(filepath)
+                        continue
+
+                    duration_sec = len(audio_data.samples) / audio_data.sample_rate
+                    logger.info(
+                        "Recovery file loaded: {} ({:.2f}s, {} samples)",
+                        filepath.name,
+                        duration_sec,
+                        len(audio_data.samples),
+                    )
+
+                    # We process it as a normal recording.
+                    # Note: this will trigger UI updates and clipboard paste.
+                    # We pass the filepath so it gets deleted on success.
+                    self._process_audio(
+                        audio_data, is_idea=False, recovery_path=filepath
+                    )
+
+                    # Small delay between files
+                    time.sleep(1)
+                except Exception as exc:
+                    # Любое исключение по конкретному recovery-файлу НЕ должно
+                    # валить весь процесс. Файл остаётся на диске — потом
+                    # пользователь сможет его переотправить через Retry.
+                    logger.exception(
+                        "FATAL while recovering file {}: {}. File kept on disk.",
+                        filepath,
+                        exc,
+                    )
 
         threading.Thread(target=process_recovery, daemon=True).start()
 

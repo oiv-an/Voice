@@ -84,8 +84,25 @@ class OpenRouterRecognizer:
 
         url = self._build_url()
 
-        requested_format = (self.config.audio_format or "mp3").strip().lower() or "mp3"
+        # Вычисляем длительность аудио — нужно для адаптивного таймаута
+        try:
+            duration_sec = len(audio.samples) / audio.sample_rate
+        except Exception:
+            duration_sec = 0.0
+
+        requested_format = (self.config.audio_format or "ogg").strip().lower() or "ogg"
+        logger.info(
+            "OpenRouter ASR: encoding audio (duration={:.2f}s, requested_format={})",
+            duration_sec,
+            requested_format,
+        )
         audio_bytes, actual_format = self._audio_to_bytes(audio, requested_format)
+        logger.info(
+            "OpenRouter ASR: encoded {} bytes as {} (base64 will be ~{} bytes)",
+            len(audio_bytes),
+            actual_format,
+            int(len(audio_bytes) * 4 / 3),
+        )
         b64_audio = base64.b64encode(audio_bytes).decode("ascii")
 
         prompt_text = (self.config.prompt or "").strip()
@@ -122,20 +139,30 @@ class OpenRouterRecognizer:
         }
 
         logger.info(
-            "OpenRouter ASR: POST {} model={} audio_format={} audio_bytes={}",
-            url,
+            "OpenRouter ASR: preparing request model={} audio_format={} audio_bytes={} b64_len={}",
             model,
             actual_format,
             len(audio_bytes),
+            len(b64_audio),
         )
 
         try:
-            # Раздельные таймауты:
+            # Адаптивные таймауты:
             # - connect: 5 сек (если прокси недоступен — быстро падаем)
-            # - read: 30 сек (gemini-flash-lite обычно отвечает за 2-5 сек,
-            #   но cold-start у некоторых прокси может быть до 15-20 сек)
-            # - write/pool: 10 сек
-            timeout = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=10.0)
+            # - read: зависит от длительности аудио, 30 сек базы + 3 сек на
+            #   каждую секунду аудио (для 20 мин = 30 + 3600 = 1 час max).
+            #   Мультимодальные модели на длинном аудио действительно думают долго.
+            # - write: 60 сек (для больших base64-пэйлоадов)
+            read_timeout = max(30.0, 30.0 + duration_sec * 3.0)
+            timeout = httpx.Timeout(
+                connect=5.0,
+                read=read_timeout,
+                write=60.0,
+                pool=10.0,
+            )
+            logger.info(
+                "OpenRouter ASR: POST {} (read_timeout={:.0f}s)", url, read_timeout
+            )
             resp = httpx.post(url, headers=headers, json=payload, timeout=timeout)
         except httpx.TimeoutException as exc:
             logger.error("OpenRouter ASR timeout: {}", exc)
@@ -216,11 +243,14 @@ class OpenRouterRecognizer:
 
         Возвращаем (bytes, actual_format_string).
 
-        Приоритет по умолчанию: mp3 -> ogg -> wav.
-        - mp3 сильнее сжимает, но его поддержка в libsndfile опциональна
-        - ogg (Vorbis) всегда доступен в libsndfile >= 1.0.28 и даёт
-          сопоставимое с mp3 сжатие (в ~8-10 раз меньше, чем WAV)
-        - wav — всегда работает, но большой объём
+        ВАЖНО о форматах:
+        - OGG Vorbis через libsndfile на Windows может падать со stack overflow
+          на длинных записях (>30 сек). Поэтому OGG пробуем, но с жёстким
+          ограничением по длительности — если аудио длиннее 25 секунд,
+          принудительно используем FLAC или WAV.
+        - FLAC — сжатие ~2× от WAV, всегда стабильно работает в libsndfile.
+        - WAV — универсальный fallback, всегда работает.
+        - MP3 — опциональная поддержка в libsndfile, часто недоступна.
         """
         samples = audio.samples
         if not isinstance(samples, np.ndarray):
@@ -228,35 +258,72 @@ class OpenRouterRecognizer:
         elif samples.dtype != np.float32:
             samples = samples.astype(np.float32)
 
-        requested_format = (requested_format or "mp3").lower()
+        # Вычисляем длительность — на длинных записях OGG небезопасен
+        try:
+            duration_sec = len(samples) / audio.sample_rate
+        except Exception:
+            duration_sec = 0.0
 
-        # Попытка #1 — MP3, если запрошен
+        # Для длинных записей OGG может упасть со stack overflow —
+        # форсируем FLAC или WAV.
+        OGG_MAX_SAFE_DURATION = 25.0  # сек
+        if duration_sec > OGG_MAX_SAFE_DURATION and requested_format in ("mp3", "ogg"):
+            logger.warning(
+                "OpenRouter ASR: audio too long for OGG/MP3 ({:.1f}s > {:.0f}s). "
+                "Forcing FLAC to avoid libsndfile stack overflow.",
+                duration_sec,
+                OGG_MAX_SAFE_DURATION,
+            )
+            requested_format = "flac"
+
+        requested_format = (requested_format or "ogg").lower()
+
+        # Попытка #1 — MP3, если запрошен (и запись короткая)
         if requested_format == "mp3":
             try:
                 buf = io.BytesIO()
                 sf.write(buf, samples, audio.sample_rate, format="MP3")
                 buf.seek(0)
-                return buf.read(), "mp3"
+                result = buf.read()
+                if len(result) > 0:
+                    return result, "mp3"
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
-                    "OpenRouter ASR: MP3 кодирование не поддерживается ({}). Пробуем OGG.",
+                    "OpenRouter ASR: MP3 encoding failed ({}). Trying OGG.",
                     exc,
                 )
 
-        # Попытка #2 — OGG Vorbis (почти всегда доступен и сильно сжимает)
-        if requested_format in ("mp3", "ogg"):
+        # Попытка #2 — OGG Vorbis (только для коротких записей)
+        if requested_format == "ogg":
             try:
                 buf = io.BytesIO()
                 sf.write(buf, samples, audio.sample_rate, format="OGG", subtype="VORBIS")
                 buf.seek(0)
-                return buf.read(), "ogg"
+                result = buf.read()
+                if len(result) > 0:
+                    return result, "ogg"
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
-                    "OpenRouter ASR: OGG кодирование не удалось ({}). Fallback на WAV.",
+                    "OpenRouter ASR: OGG encoding failed ({}). Falling back to FLAC.",
                     exc,
                 )
 
-        # Попытка #3 — WAV fallback (работает всегда, но тяжёлый)
+        # Попытка #3 — FLAC (надёжное сжатие без потерь, ~2× от WAV)
+        if requested_format in ("flac", "mp3", "ogg"):
+            try:
+                buf = io.BytesIO()
+                sf.write(buf, samples, audio.sample_rate, format="FLAC")
+                buf.seek(0)
+                result = buf.read()
+                if len(result) > 0:
+                    return result, "flac"
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "OpenRouter ASR: FLAC encoding failed ({}). Falling back to WAV.",
+                    exc,
+                )
+
+        # Попытка #4 — WAV (работает всегда, но большой объём)
         buf = io.BytesIO()
         sf.write(buf, samples, audio.sample_rate, format="WAV", subtype="PCM_16")
         buf.seek(0)
