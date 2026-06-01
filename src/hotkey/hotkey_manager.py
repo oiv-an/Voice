@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from threading import Thread
+from threading import RLock, Thread
 from typing import Callable, Optional
 
 import keyboard  # type: ignore[import]
+from loguru import logger
 
 
 Callback = Callable[[], None]
@@ -68,6 +69,7 @@ class HotKeyManager:
 
         self._listener_thread: Optional[Thread] = None
         self._running: bool = False
+        self._lock = RLock()
 
     # ------------------------------------------------------------------ public
 
@@ -75,26 +77,82 @@ class HotKeyManager:
         """
         Start listening for global hotkeys in a background thread.
         """
-        if self._running:
-            return
-        self._running = True
-        self._listener_thread = Thread(target=self._listen_loop, daemon=True)
-        self._listener_thread.start()
+        with self._lock:
+            if self._running:
+                return
+            self._running = True
+            self._listener_thread = Thread(
+                target=self._listen_loop,
+                name="HotKeyManagerListener",
+                daemon=True,
+            )
+            self._listener_thread.start()
 
     def stop(self) -> None:
         """
         Stop listening for hotkeys.
         """
-        if not self._running:
-            return
-        self._running = False
-        keyboard.unhook_all()
+        with self._lock:
+            if not self._running:
+                return
+            self._running = False
+            try:
+                keyboard.unhook_all()
+                logger.info("Global hotkeys stopped")
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Failed to stop global hotkeys: {}", exc)
+
+    def restart(self) -> bool:
+        """
+        Soft-restart global keyboard hooks without restarting the application.
+
+        The `keyboard` library can occasionally stop delivering global hotkey
+        events on Windows while the Qt application itself remains alive. In that
+        case a full app restart is unnecessary: unhooking and registering the
+        hotkeys again is usually enough.
+        """
+        with self._lock:
+            if not self._running:
+                logger.info("Hotkey restart requested while stopped; starting listener")
+                self.start()
+                return True
+
+            try:
+                logger.info("Restarting global hotkey hooks")
+                keyboard.unhook_all()
+                self._register_hotkeys()
+                logger.info("Global hotkey hooks restarted successfully")
+                return True
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Failed to restart global hotkey hooks: {}", exc)
+                return False
 
     # ---------------------------------------------------------------- internal
 
     def _listen_loop(self) -> None:
         """
         Register hotkeys and block in a loop until stop() is called.
+        """
+        try:
+            self._register_hotkeys()
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to register global hotkeys: {}", exc)
+            with self._lock:
+                self._running = False
+            return
+
+        # Block until stop() is called; simple polling loop.
+        import time
+
+        while self._running:
+            time.sleep(0.1)
+
+    def _register_hotkeys(self) -> None:
+        """
+        Register all configured hotkeys.
+
+        This method is intentionally idempotent only when callers unhook first.
+        Use restart() for safe re-registration during runtime.
         """
         # Record press / release
         # Явно разделяем старт и стоп по нажатию/отжатию основной клавиши,
@@ -199,11 +257,14 @@ class HotKeyManager:
             suppress=False,
         )
 
-        # Block until stop() is called; simple polling loop.
-        import time
-
-        while self._running:
-            time.sleep(0.1)
+        logger.info(
+            "Global hotkeys registered: record='{}', idea='{}', cancel='{}', toggle_window='{}', toggle_debug='{}'",
+            self.record_hotkey,
+            self.record_idea_hotkey,
+            self.cancel_hotkey,
+            self.toggle_window_hotkey,
+            self.toggle_debug_hotkey,
+        )
 
     def _handle_release(self) -> None:
         """

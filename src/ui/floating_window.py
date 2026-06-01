@@ -143,6 +143,7 @@ class FloatingWindow(QWidget):
     toggle_compact_requested = pyqtSignal()
     settings_save_requested = pyqtSignal()
     retry_requested = pyqtSignal()
+    restart_hotkeys_requested = pyqtSignal()
 
     def __init__(self, ui_config: UIConfig, history_manager=None) -> None:
         super().__init__()
@@ -191,6 +192,7 @@ class FloatingWindow(QWidget):
         top_layout.setSpacing(4)
         top_layout.addWidget(self.menu_button)
         top_layout.addWidget(self.history_button)
+        top_layout.addWidget(self.restart_hotkeys_button)
         top_layout.addStretch()
         top_layout.addWidget(self.compact_button_normal)
         top_layout.addWidget(self.close_button)
@@ -272,6 +274,11 @@ class FloatingWindow(QWidget):
         self.history_button = QPushButton("🕒")
         self.history_button.setFixedSize(24, 24)
         self.history_button.clicked.connect(self._on_history_clicked)
+
+        self.restart_hotkeys_button = QPushButton("⌨")
+        self.restart_hotkeys_button.setToolTip("Перезапустить приложение и восстановить горячие клавиши")
+        self.restart_hotkeys_button.setFixedSize(24, 24)
+        self.restart_hotkeys_button.clicked.connect(self._on_restart_hotkeys_clicked)
 
         self.close_button = QPushButton("✖️")
         self.close_button.setFixedSize(24, 24)
@@ -710,6 +717,10 @@ class FloatingWindow(QWidget):
         """Клик по кнопке "Попробуйте еще раз"."""
         self.hide_retry_button()
         self.retry_requested.emit()
+
+    def _on_restart_hotkeys_clicked(self) -> None:
+        """Клик по кнопке ручного восстановления глобальных горячих клавиш."""
+        self.restart_hotkeys_requested.emit()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:

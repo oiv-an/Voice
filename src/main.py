@@ -4,6 +4,7 @@ import time
 import threading
 import traceback
 import re
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -16,7 +17,7 @@ if getattr(sys, 'frozen', False):
     os.environ['SSL_CERT_FILE'] = ca_bundle
     os.environ['REQUESTS_CA_BUNDLE'] = ca_bundle
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QApplication
 from loguru import logger
 
@@ -202,6 +203,7 @@ class App(QObject):
         self.window.settings_requested.connect(self.open_settings_dialog)
         self.window.exit_requested.connect(self.quit)
         self.window.retry_requested.connect(self._retry_processing)
+        self.window.restart_hotkeys_requested.connect(self.restart_hotkeys)
         self.window.settings_save_requested.connect(lambda: AppSettings.save_default(self.settings))
         self.tray.show_window_requested.connect(self.show_window)
         self.tray.settings_requested.connect(self.open_settings_dialog)
@@ -222,6 +224,13 @@ class App(QObject):
 
         # Check for recovery files on startup
         self._check_recovery_files()
+
+        # Профилактический мягкий перезапуск global keyboard hooks.
+        # Иногда Windows/keyboard перестаёт доставлять Ctrl+Win, хотя UI живой.
+        self._hotkey_recovery_timer = QTimer(self)
+        self._hotkey_recovery_timer.setInterval(10 * 60 * 1000)  # 10 минут
+        self._hotkey_recovery_timer.timeout.connect(self._auto_restart_hotkeys)
+        self._hotkey_recovery_timer.start()
 
     # --------------------------------------------------------------------- UI
 
@@ -340,6 +349,110 @@ class App(QObject):
         else:
             logger.warning("Retry requested, but no audio data is available.")
             self.state_changed.emit("idle")
+
+    def restart_hotkeys(self) -> None:
+        """
+        Ручное восстановление горячих клавиш.
+
+        После Windows lock/unlock мягкий rebind hooks может не помогать: сам
+        низкоуровневый hook библиотеки `keyboard` остаётся в плохом состоянии.
+        Поэтому кнопка восстановления теперь делает полный самоперезапуск
+        приложения — это стабильно возвращает Ctrl+Win.
+        """
+        if self._is_recording:
+            self.message_shown.emit("Идёт запись — перезапуск отложен", 2500)
+            return
+
+        self._request_app_restart("manual hotkey recovery")
+
+    def _request_app_restart(self, reason: str) -> None:
+        """Запускает новый экземпляр приложения и завершает текущий."""
+        logger.warning("Restarting application: {}", reason)
+        self.message_shown.emit("Перезапуск приложения...", 1000)
+
+        try:
+            if getattr(sys, "frozen", False):
+                # PyInstaller onefile распаковывает приложение во временную
+                # папку _MEI*. При self-restart важно не запускать новый exe
+                # напрямую из старого процесса, иначе возможны ошибки cleanup:
+                # "Failed to remove temporary directory". Поэтому создаём
+                # маленький .cmd launcher рядом с exe. Он ждёт завершения
+                # текущего PID, очищает PyInstaller-переменные и запускает exe
+                # уже как свежий процесс.
+                exe_path = Path(sys.executable).resolve()
+                cwd = str(exe_path.parent)
+
+                launcher_path = exe_path.parent / "restart_voicecapture.cmd"
+                launcher_path.write_text(
+                    "@echo off\r\n"
+                    "setlocal\r\n"
+                    "set PYINSTALLER_RESET_ENVIRONMENT=1\r\n"
+                    "set _PYI_APPLICATION_HOME_DIR=\r\n"
+                    "set _PYI_PARENT_PROCESS_LEVEL=\r\n"
+                    "set _PYI_SPLASH_IPC=\r\n"
+                    f"powershell.exe -NoProfile -Command \"Wait-Process -Id {os.getpid()} -Timeout 10 -ErrorAction SilentlyContinue\" >nul 2>nul\r\n"
+                    "timeout /t 1 /nobreak >nul\r\n"
+                    f"start \"\" /d \"{cwd}\" \"{exe_path}\"\r\n"
+                    "endlocal\r\n",
+                    encoding="utf-8",
+                )
+
+                clean_env = os.environ.copy()
+                clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+                for key in list(clean_env):
+                    if key.startswith("_PYI_"):
+                        clean_env.pop(key, None)
+
+                command = [
+                    "cmd.exe",
+                    "/c",
+                    "start",
+                    "",
+                    "/min",
+                    str(launcher_path),
+                ]
+                creationflags = (
+                    getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                    | getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                )
+                popen_env = clean_env
+            else:
+                command = [sys.executable, *sys.argv]
+                cwd = str(self.base_dir)
+                creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                popen_env = None
+
+            subprocess.Popen(  # noqa: S603
+                command,
+                cwd=cwd,
+                env=popen_env,
+                close_fds=True,
+                creationflags=creationflags,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to spawn replacement process: {}", exc)
+            self.state_changed.emit("error")
+            self.message_shown.emit("Не удалось перезапустить приложение. См. logs/app.log", 5000)
+            return
+
+        try:
+            self.hotkeys.stop()
+        except Exception:
+            pass
+
+        QTimer.singleShot(100, self.qt_app.quit)
+
+    def _auto_restart_hotkeys(self) -> None:
+        """Периодическая профилактическая перерегистрация hooks."""
+        if self._is_recording:
+            logger.debug("Skipping scheduled hotkey restart: recording is active")
+            return
+
+        ok = self.hotkeys.restart()
+        if ok:
+            logger.info("Scheduled hotkey restart completed")
+        else:
+            logger.warning("Scheduled hotkey restart failed")
 
     def start_recording(self, is_idea: bool = False) -> None:
         if self._is_recording:

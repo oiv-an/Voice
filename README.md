@@ -254,6 +254,12 @@ python build_exe.py
 
 ## 📋 Changelog
 
+### v2.4.1 (unreleased)
+
+- **⌨️ Восстановление горячих клавиш:** Добавлена кнопка `⌨` в главном окне для ручного полного перезапуска приложения, если Windows перестала доставлять `Ctrl+Win`, хотя UI остаётся живым.
+- **🔄 Профилактическая перерегистрация hooks:** Глобальные hotkey hooks мягко перерегистрируются каждые 10 минут, если запись не активна.
+- **🐛 Исправлен self-restart в PyInstaller onefile:** Перезапуск `.exe` теперь идёт через отдельный launcher с очисткой `_PYI_*` и `PYINSTALLER_RESET_ENVIRONMENT=1`, чтобы избежать ошибок временной папки `_MEI...` и проблем подключения после рестарта.
+
 ### v2.4.0 (текущая)
 
 - **🧠 OpenRouter как третий ASR-бекенд:** Можно выбрать `OpenRouter` в настройках и распознавать через мультимодальные модели OpenRouter (по умолчанию — `google/gemini-3.1-flash-lite-preview`).
@@ -376,6 +382,12 @@ When you press `Ctrl+Win+Alt` and dictate a note:
 
 ## Changelog
 
+### v2.4.1 (unreleased)
+
+- **Hotkey recovery:** Added a `⌨` button to the main window for a full manual app restart when Windows stops delivering `Ctrl+Win` while the UI is still alive.
+- **Scheduled hook refresh:** Global hotkey hooks are softly re-registered every 10 minutes when recording is not active.
+- **PyInstaller onefile self-restart fix:** The built `.exe` now restarts through a detached launcher that clears `_PYI_*` variables and sets `PYINSTALLER_RESET_ENVIRONMENT=1`, avoiding `_MEI...` temporary directory cleanup errors and broken connectivity after restart.
+
 ### v2.4.0
 - **OpenRouter as 3rd ASR backend:** Pick `OpenRouter` in settings and transcribe via multimodal models (default: `google/gemini-3.1-flash-lite-preview`).
 - **ASR Prompt field:** Every backend (Groq, OpenAI, OpenRouter) now has its own "ASR prompt" — an instruction to the recognition model about terms, names, style.
@@ -443,4 +455,3 @@ python build_exe.py
 ## License
 
 MIT License.
-
